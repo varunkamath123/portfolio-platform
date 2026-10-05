@@ -247,8 +247,9 @@ export default function ResearchPage() {
   const [submitError, setSubmitError] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  // Portfolio context for AI
-  const [portfolioCtx, setPortfolioCtx] = useState('')
+  // Portfolio context for AI — ref keeps value fresh in submit closures
+  const portfolioCtxRef = useRef('')
+  const [portfolioLoaded, setPortfolioLoaded] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -260,7 +261,8 @@ export default function ResearchPage() {
       .then(r => r.json())
       .then(d => {
         if (d.holdings?.length) {
-          setPortfolioCtx(buildPortfolioContext(d.holdings, d.summary))
+          portfolioCtxRef.current = buildPortfolioContext(d.holdings, d.summary)
+          setPortfolioLoaded(true)
         }
       })
       .catch(() => {})
@@ -326,7 +328,7 @@ export default function ResearchPage() {
     const res = await fetch('/api/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: draft.trim(), portfolioContext: portfolioCtx || undefined }),
+      body: JSON.stringify({ question: draft.trim(), portfolioContext: portfolioCtxRef.current || undefined }),
     })
 
     if (!res.ok) {
@@ -353,7 +355,7 @@ export default function ResearchPage() {
     const res = await fetch(`/api/questions/${activeId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: followUp.trim(), portfolioContext: portfolioCtx || undefined }),
+      body: JSON.stringify({ content: followUp.trim(), portfolioContext: portfolioCtxRef.current || undefined }),
     })
 
     setFollowUp('')
@@ -484,9 +486,17 @@ export default function ResearchPage() {
           <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto">
             <div className="w-full max-w-2xl">
               <h1 className="text-xl font-bold text-white mb-1">Stock Research</h1>
-              <p className="text-sm mb-6" style={{ color: 'var(--muted)' }}>
-                Ask about your portfolio, Indian stocks, or investment strategies.
-              </p>
+              <div className="flex items-center gap-2 mb-6">
+                <p className="text-sm" style={{ color: 'var(--muted)' }}>
+                  Ask about your portfolio, Indian stocks, or investment strategies.
+                </p>
+                {portfolioLoaded && (
+                  <span className="flex-shrink-0 text-xs px-2 py-0.5 rounded-full font-medium"
+                    style={{ background: 'rgba(22,199,132,0.12)', color: 'var(--green)' }}>
+                    ● Portfolio loaded
+                  </span>
+                )}
+              </div>
 
               <form onSubmit={submitQuestion} className="space-y-3">
                 <div className="relative">
@@ -611,9 +621,12 @@ export default function ResearchPage() {
                   </svg>
                 </button>
               </form>
-              <p className="text-xs text-center mt-1.5" style={{ color: 'var(--muted)' }}>
-                Enter to send · Shift+Enter for new line
-              </p>
+              <div className="flex items-center justify-center gap-3 mt-1.5">
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>Enter to send · Shift+Enter for new line</p>
+                {portfolioLoaded && (
+                  <span className="text-xs" style={{ color: 'var(--green)' }}>● Portfolio context active</span>
+                )}
+              </div>
             </div>
           </div>
         )}

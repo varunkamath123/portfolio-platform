@@ -91,12 +91,12 @@ From 52W High: ${screener.high_52w ? ((cmp / screener.high_52w - 1) * 100).toFix
 ${screener.error ? `Data note: ${screener.error}` : ''}
 `.trim()
 
-  const prompt = `Analyze ${symbol} using the data below and respond with a JSON object ONLY (no markdown fences).
+  const prompt = `Analyze ${symbol} using the data below. Respond with a JSON object ONLY (no markdown fences).
 
 Data:
 ${dataContext}
 
-Return this exact JSON structure:
+Return this exact JSON (no extra fields):
 {
   "agents": [
     {"agent": "GRAHAM", "score": 0-10, "reasoning": "one sentence"},
@@ -106,28 +106,21 @@ Return this exact JSON structure:
     {"agent": "MACRO", "score": 0-10, "reasoning": "one sentence"},
     {"agent": "DEVIL", "score": 0-10, "reasoning": "one sentence"}
   ],
-  "composite": number,
-  "verdict": "BUY / HOLD / SELL / WATCH — one line reason",
+  "composite": number 0-10,
+  "verdict": "BUY/HOLD/SELL/WATCH — one line",
   "bull_case": ["point 1", "point 2", "point 3"],
   "bear_case": ["point 1", "point 2", "point 3"],
   "entry": price or null,
   "stop": price or null,
   "target1": price or null,
-  "rr": ratio or null,
-  "analysis_md": "3-4 paragraph markdown analysis on valuation, quality, momentum, and key risk."
+  "rr": ratio or null
 }
 
-Scoring:
-- GRAHAM: margin of safety, PE vs intrinsic value, debt, asset backing
-- BUFFETT: moat quality, ROE consistency, brand, pricing power
-- PABRAI: asymmetric upside, beaten-down quality, downside protection
-- GARP: PEG quality, growth vs price, earnings delivery
-- MACRO: sector tailwinds, rate cycle, policy environment
-- DEVIL: risks the bulls ignore, what could go wrong`
+GRAHAM=margin of safety+PE vs intrinsic value; BUFFETT=moat+ROE consistency; PABRAI=asymmetric upside; GARP=PEG+growth vs price; MACRO=sector tailwinds+policy; DEVIL=key risks bulls ignore`
 
   const msg = await client.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 2000,
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 800,
     system: FINANCE_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: prompt }],
   })
@@ -144,7 +137,7 @@ Scoring:
     verdict: parsed.verdict, bull_case: parsed.bull_case,
     bear_case: parsed.bear_case, entry: parsed.entry,
     stop: parsed.stop, target1: parsed.target1,
-    rr: parsed.rr, analysis_md: parsed.analysis_md,
+    rr: parsed.rr, analysis_md: null,
   }
 }
 
@@ -153,7 +146,8 @@ export async function answerStockQuestion(
   tickers: string[],
   portfolioContext?: string,
 ): Promise<{ answer_md: string; mirofish: MiroFishResult[] }> {
-  const mirofish = await Promise.all(tickers.slice(0, 3).map(t => runMiroFish(t)))
+  // Cap at 2 tickers to stay within Vercel's 10s function limit
+  const mirofish = await Promise.all(tickers.slice(0, 2).map(t => runMiroFish(t)))
 
   const stockContext = mirofish.map(r => `
 ### ${r.symbol} (${r.screener.sector ?? 'Unknown'} | ${r.screener.market_cap_category})
