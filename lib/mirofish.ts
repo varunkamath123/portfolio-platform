@@ -34,7 +34,7 @@ export type MiroFishResult = {
   stop: number | null
   target1: number | null
   rr: number | null
-  analysis_md: string
+  analysis_md: string | null
 }
 
 export type ConversationMessage = {
