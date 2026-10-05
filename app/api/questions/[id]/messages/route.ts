@@ -108,7 +108,7 @@ export async function POST(
   // Get conversation history (excluding the message we just saved)
   const { data: prevMessages } = await supabase
     .from('messages')
-    .select('role, content')
+    .select('id, role, content')
     .eq('question_id', id)
     .order('created_at', { ascending: true })
     .limit(20)

@@ -20,7 +20,7 @@ export function Nav({ isAdmin = false }: { isAdmin?: boolean }) {
     <nav style={{ background: '#0a100a', borderBottom: '1px solid var(--border)' }} className="sticky top-0 z-10 px-4">
       <div className="max-w-6xl mx-auto flex items-center h-14 gap-6">
         <Link href="/dashboard" className="font-bold text-sm tracking-tight" style={{ color: 'var(--green)' }}>
-          ◈ MiroFish
+          ◈ Portfolio
         </Link>
 
         <div className="flex items-center gap-1 flex-1">
