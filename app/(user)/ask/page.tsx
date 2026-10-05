@@ -42,20 +42,16 @@ export default function AskPage() {
 
   return (
     <div className="max-w-2xl mx-auto mt-10 px-4 pb-20">
-      <h1 className="text-2xl font-bold text-white mb-1">Ask about any stock</h1>
+      <h1 className="text-2xl font-bold text-white mb-1">Stock Research</h1>
       <p className="text-sm mb-8" style={{ color: 'var(--muted)' }}>
-        MiroFish runs a 6-agent analysis (Graham, Buffett, Pabrai, GARP, Macro, Devil&apos;s Advocate)
-        using live Screener.in data. Answers are visible to everyone on this platform.
+        Ask anything about Indian stocks. A multi-perspective analysis will be run using
+        live Screener.in data and returned within 30 seconds.
       </p>
 
       <form onSubmit={submit} className="space-y-4">
         <textarea
           className="w-full rounded-xl px-4 py-3 text-white text-sm resize-none focus:outline-none min-h-[120px]"
-          style={{
-            background: 'var(--bg-input)',
-            border: '1px solid var(--border)',
-            ...(typeof window !== 'undefined' ? {} : {}),
-          }}
+          style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}
           placeholder="Ask anything about Indian stocks…"
           value={question}
           onChange={e => setQuestion(e.target.value)}
@@ -76,9 +72,9 @@ export default function AskPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Running MiroFish… (15–30s)
+              Analysing… (15–30s)
             </span>
-          ) : 'Ask MiroFish →'}
+          ) : 'Get Analysis →'}
         </button>
       </form>
 

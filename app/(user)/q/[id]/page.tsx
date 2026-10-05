@@ -47,7 +47,7 @@ function ScoreBar({ score }: { score: number }) {
   )
 }
 
-function MiroFishCard({ data }: { data: MiroFish }) {
+function AnalysisCard({ data }: { data: MiroFish }) {
   const composite = data.composite
   const verdictColor = composite >= 7 ? 'var(--green)' : composite >= 5 ? '#f59e0b' : '#f87171'
   const verdictBg   = composite >= 7 ? 'rgba(22,199,132,0.1)' : composite >= 5 ? 'rgba(245,158,11,0.1)' : 'rgba(248,113,113,0.1)'
@@ -175,7 +175,7 @@ export default function QuestionPage({ params }: { params: Promise<{ id: string 
       {/* MiroFish analysis cards */}
       {mirofish.length > 0 && (
         <div className="space-y-4">
-          {mirofish.map(m => <MiroFishCard key={m.symbol} data={m} />)}
+          {mirofish.map(m => <AnalysisCard key={m.symbol} data={m} />)}
         </div>
       )}
 

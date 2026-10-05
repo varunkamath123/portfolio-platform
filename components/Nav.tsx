@@ -6,8 +6,7 @@ import { cn } from '@/lib/utils'
 
 const userLinks = [
   { href: '/dashboard', label: 'Portfolio' },
-  { href: '/ask',       label: 'Ask' },
-  { href: '/feed',      label: 'Feed' },
+  { href: '/ask',       label: 'Research' },
 ]
 
 const adminLinks = [

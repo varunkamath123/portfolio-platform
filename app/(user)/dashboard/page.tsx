@@ -50,7 +50,7 @@ export default function DashboardPage() {
         <Link href="/ask"
           className="text-sm font-semibold px-4 py-2 rounded-lg transition-opacity hover:opacity-80"
           style={{ background: 'var(--green)', color: '#000' }}>
-          Ask MiroFish →
+          Research →
         </Link>
       </div>
 
@@ -158,7 +158,7 @@ export default function DashboardPage() {
 
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-white">Recent Q&amp;As</h2>
+          <h2 className="font-semibold text-white">Recent Research</h2>
           <Link href="/feed" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--green)' }}>
             View all →
           </Link>
@@ -180,8 +180,8 @@ function RecentFeed() {
 
   if (!items.length) return (
     <p className="text-sm" style={{ color: 'var(--muted)' }}>
-      No questions yet.{' '}
-      <Link href="/ask" className="underline" style={{ color: 'var(--green)' }}>Ask the first one.</Link>
+      No research yet.{' '}
+      <Link href="/ask" className="underline" style={{ color: 'var(--green)' }}>Start researching.</Link>
     </p>
   )
 

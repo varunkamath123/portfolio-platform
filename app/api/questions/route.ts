@@ -1,9 +1,9 @@
-﻿import { auth } from '@clerk/nextjs/server'
+import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { extractTickers, answerStockQuestion } from '@/lib/mirofish'
 
-// GET /api/questions â€” community feed
+// GET /api/questions -- current user's own research history
 export async function GET(req: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -11,13 +11,21 @@ export async function GET(req: NextRequest) {
   const limit = parseInt(req.nextUrl.searchParams.get('limit') ?? '20')
   const offset = parseInt(req.nextUrl.searchParams.get('offset') ?? '0')
 
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('id')
+    .eq('clerk_user_id', userId)
+    .single()
+
+  if (!profile) return NextResponse.json({ questions: [] })
+
   const { data, error } = await supabase
     .from('questions')
     .select(`
       id, question, tickers, status, created_at,
-      user_profiles ( full_name ),
       answers ( id, answer_md, mirofish_data, created_at )
     `)
+    .eq('user_id', profile.id)
     .eq('status', 'answered')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
@@ -26,7 +34,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ questions: data })
 }
 
-// POST /api/questions â€” submit a new question
+// POST /api/questions -- submit a new research question
 export async function POST(req: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -45,12 +53,10 @@ export async function POST(req: NextRequest) {
 
   if (!profile) return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
 
-  // Extract tickers from question (or use user-provided ones)
   const tickers: string[] = body.tickers?.length
     ? body.tickers
     : await extractTickers(question)
 
-  // Save question
   const { data: qRow, error: qErr } = await supabase
     .from('questions')
     .insert({ user_id: profile.id, question, tickers, status: 'processing' })
@@ -59,7 +65,6 @@ export async function POST(req: NextRequest) {
 
   if (qErr || !qRow) return NextResponse.json({ error: 'Failed to save question' }, { status: 500 })
 
-  // Run MiroFish analysis (async â€” but we await here for MVP simplicity)
   try {
     const { answer_md, mirofish } = await answerStockQuestion(question, tickers)
 
