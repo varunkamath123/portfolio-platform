@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
 
 type Holding = {
@@ -45,6 +45,16 @@ function CapBadge({ cat }: { cat: string }) {
     <span className="text-xs rounded px-1.5 py-0.5 font-medium" style={{ ...style, whiteSpace: 'nowrap' }}>
       {cat === 'Unknown' ? '—' : cat}
     </span>
+  )
+}
+
+function HealthLabel({ children, color }: { children: React.ReactNode; color?: 'green' | 'red' | 'amber' }) {
+  const c = color === 'green' ? 'var(--green)' : color === 'red' ? '#f87171' : color === 'amber' ? '#f59e0b' : '#6b8f6b'
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: c }}>{children}</span>
+      <div className="flex-1 h-px" style={{ background: `${c}30` }} />
+    </div>
   )
 }
 
@@ -235,86 +245,111 @@ export default function DashboardPage() {
       {(healthLoading || health || healthError) && (
         <div className="mb-8">
           <h2 className="font-semibold text-white mb-4">Portfolio Health</h2>
+
           {healthLoading && !health && (
-            <div className="rounded-xl p-6" style={cardStyle}>
-              <div className="flex items-center gap-3">
-                <svg className="animate-spin h-5 w-5" style={{ color: 'var(--green)' }} viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-                <p className="text-sm" style={{ color: 'var(--muted)' }}>
-                  Analysing portfolio health…
-                </p>
-              </div>
+            <div className="rounded-xl p-6 flex items-center gap-3" style={cardStyle}>
+              <svg className="animate-spin h-4 w-4 flex-shrink-0" style={{ color: 'var(--green)' }} viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>Analysing portfolio health…</p>
             </div>
           )}
+
           {healthError && !health && (
             <div className="rounded-xl p-6" style={cardStyle}>
-              <p className="text-sm" style={{ color: 'var(--muted)' }}>
-                Health analysis unavailable — try refreshing the page.
-              </p>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>Health analysis unavailable — try refreshing.</p>
             </div>
           )}
+
           {health && (
-            <div className="grid md:grid-cols-2 gap-4">
-              {/* Score + summary */}
-              <div className="rounded-xl p-5 space-y-4" style={cardStyle}>
-                <HealthGauge score={health.health_score} />
-                <p className="text-sm" style={{ color: 'var(--muted)' }}>{health.summary}</p>
-              </div>
+            <div className="space-y-3">
 
-              {/* Growth outlook */}
-              <div className="rounded-xl p-5" style={cardStyle}>
-                <p className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--green)' }}>
-                  2–3 Quarter Outlook
-                </p>
-                <p className="text-sm" style={{ color: 'var(--muted)' }}>{health.growth_outlook}</p>
+              {/* Row 1: Score + Outlook side by side */}
+              <div className="grid md:grid-cols-2 gap-3">
 
-                {health.opportunities?.length > 0 && (
-                  <div className="mt-4">
-                    <p className="text-xs font-semibold mb-1" style={{ color: 'var(--green)' }}>Opportunities</p>
-                    {health.opportunities.map((o, i) => (
-                      <p key={i} className="text-xs mb-0.5" style={{ color: 'var(--muted)' }}>+ {o}</p>
-                    ))}
+                {/* Score card */}
+                <div className="rounded-xl p-5" style={cardStyle}>
+                  <HealthLabel>Health Score</HealthLabel>
+                  <div className="flex items-center gap-5 mt-3 mb-4">
+                    <HealthGauge score={health.health_score} />
                   </div>
-                )}
-
-                {health.risks?.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-xs font-semibold mb-1 text-red-400">Risks</p>
-                    {health.risks.map((r, i) => (
-                      <p key={i} className="text-xs mb-0.5" style={{ color: 'var(--muted)' }}>− {r}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Sector concentration */}
-              {health.sector_concentration?.length > 0 && (
-                <div className="rounded-xl p-5 md:col-span-2" style={cardStyle}>
-                  <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>
-                    Sector Allocation
+                  <HealthLabel>Assessment</HealthLabel>
+                  <p className="mt-2 text-sm leading-relaxed" style={{ color: '#c8dfc8' }}>
+                    {health.summary}
                   </p>
-                  <div className="space-y-2">
-                    {health.sector_concentration.map(sc => (
-                      <div key={sc.sector} className="flex items-center gap-3">
-                        <span className="text-xs w-32 truncate" style={{ color: 'var(--muted)' }}>{sc.sector}</span>
-                        <div className="flex-1 h-1.5 rounded-full" style={{ background: 'var(--border)' }}>
-                          <div className="h-1.5 rounded-full" style={{
-                            width: `${Math.min(sc.allocation_pct, 100)}%`,
-                            background: sc.allocation_pct > 30 ? '#f59e0b' : 'var(--green)',
-                          }} />
+                </div>
+
+                {/* Outlook card */}
+                <div className="rounded-xl p-5" style={cardStyle}>
+                  <HealthLabel>2–3 Quarter Outlook</HealthLabel>
+                  <p className="mt-2 text-sm leading-relaxed" style={{ color: '#c8dfc8' }}>
+                    {health.growth_outlook}
+                  </p>
+                </div>
+              </div>
+
+              {/* Row 2: Opportunities + Risks */}
+              {(health.opportunities?.length > 0 || health.risks?.length > 0) && (
+                <div className="grid md:grid-cols-2 gap-3">
+
+                  {health.opportunities?.length > 0 && (
+                    <div className="rounded-xl p-5" style={cardStyle}>
+                      <HealthLabel color="green">Opportunities</HealthLabel>
+                      <ul className="mt-3 space-y-2">
+                        {health.opportunities.map((o, i) => (
+                          <li key={i} className="flex gap-2 text-sm leading-snug">
+                            <span className="mt-0.5 flex-shrink-0 text-base leading-none" style={{ color: 'var(--green)' }}>↑</span>
+                            <span style={{ color: '#c8dfc8' }}>{o}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {health.risks?.length > 0 && (
+                    <div className="rounded-xl p-5" style={cardStyle}>
+                      <HealthLabel color="red">Risks</HealthLabel>
+                      <ul className="mt-3 space-y-2">
+                        {health.risks.map((r, i) => (
+                          <li key={i} className="flex gap-2 text-sm leading-snug">
+                            <span className="mt-0.5 flex-shrink-0 text-base leading-none" style={{ color: '#f87171' }}>↓</span>
+                            <span style={{ color: '#c8dfc8' }}>{r}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Row 3: Sector allocation */}
+              {health.sector_concentration?.length > 0 && (
+                <div className="rounded-xl p-5" style={cardStyle}>
+                  <HealthLabel>Sector Allocation</HealthLabel>
+                  <div className="mt-3 space-y-3">
+                    {health.sector_concentration.map(sc => {
+                      const over = sc.allocation_pct > 30
+                      return (
+                        <div key={sc.sector} className="flex items-center gap-3">
+                          <span className="text-sm w-36 truncate flex-shrink-0" style={{ color: '#c8dfc8' }}>{sc.sector}</span>
+                          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                            <div className="h-2 rounded-full transition-all" style={{
+                              width: `${Math.min(sc.allocation_pct, 100)}%`,
+                              background: over ? '#f59e0b' : 'var(--green)',
+                            }} />
+                          </div>
+                          <span className="text-sm font-medium w-12 text-right flex-shrink-0"
+                            style={{ color: over ? '#f59e0b' : 'white' }}>
+                            {sc.allocation_pct.toFixed(1)}%
+                          </span>
                         </div>
-                        <span className="text-xs w-10 text-right" style={{
-                          color: sc.allocation_pct > 30 ? '#f59e0b' : 'white',
-                        }}>
-                          {sc.allocation_pct.toFixed(1)}%
-                        </span>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}
+
             </div>
           )}
         </div>
