@@ -40,7 +40,7 @@ export default function DashboardPage() {
         setSummary(d.summary)
         setLoading(false)
       })
-      .catch(() => { setError({ message: 'Failed to fetch portfolio' }); setLoading(false) })
+      .catch(() => { window.location.href = '/onboarding' })
   }, [])
 
   return (
@@ -159,8 +159,8 @@ export default function DashboardPage() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-white">Recent Research</h2>
-          <Link href="/feed" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--green)' }}>
-            View all →
+          <Link href="/ask" className="text-sm hover:opacity-70 transition-opacity" style={{ color: 'var(--green)' }}>
+            New research →
           </Link>
         </div>
         <RecentFeed />
