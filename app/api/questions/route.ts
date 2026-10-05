@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const question: string = body.question?.trim()
+  const portfolioContext: string | undefined = body.portfolioContext
   if (!question || question.length < 5) {
     return NextResponse.json({ error: 'Question too short' }, { status: 400 })
   }
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
   if (qErr || !qRow) return NextResponse.json({ error: 'Failed to save question' }, { status: 500 })
 
   try {
-    const { answer_md, mirofish } = await answerStockQuestion(question, tickers)
+    const { answer_md, mirofish } = await answerStockQuestion(question, tickers, portfolioContext)
 
     await supabase.from('answers').insert({
       question_id: qRow.id,

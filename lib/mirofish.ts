@@ -151,10 +151,11 @@ Scoring:
 export async function answerStockQuestion(
   question: string,
   tickers: string[],
+  portfolioContext?: string,
 ): Promise<{ answer_md: string; mirofish: MiroFishResult[] }> {
   const mirofish = await Promise.all(tickers.slice(0, 3).map(t => runMiroFish(t)))
 
-  const context = mirofish.map(r => `
+  const stockContext = mirofish.map(r => `
 ### ${r.symbol} (${r.screener.sector ?? 'Unknown'} | ${r.screener.market_cap_category})
 CMP ₹${r.live_price ?? r.screener.cmp} | PE ${r.screener.pe}x | ROE ${r.screener.roe}% | ROCE ${r.screener.roce}% | 5Y CAGR ${r.screener.pat_cagr_5y}% | PEG ${r.peg_5y}
 Composite: ${r.composite}/10 | Verdict: ${r.verdict}
@@ -168,14 +169,13 @@ Bear: ${r.bear_case.join('; ')}
     system: FINANCE_SYSTEM_PROMPT,
     messages: [{
       role: 'user',
-      content: `Answer this investment question using the analysis data provided. Be direct, specific, use actual numbers. Format in clean markdown with headers.
+      content: `Answer this investment question using the data provided. Be direct, specific, use actual numbers. Format in clean markdown with headers.
 
 Question: ${question}
+${portfolioContext ? `\nUser's Portfolio:\n${portfolioContext}\n` : ''}
+${stockContext ? `\nStock Analysis Data:\n${stockContext}` : ''}
 
-Analysis Data:
-${context}
-
-Give a comprehensive answer directly addressing the question. Include specific numbers, ratios, and price targets where relevant. End with a clear actionable recommendation.`,
+Give a comprehensive answer directly addressing the question. Reference specific holdings and their performance where relevant. End with a clear actionable recommendation.`,
     }],
   })
 
@@ -189,18 +189,26 @@ export async function continueConversation(
   history: ConversationMessage[],
   newMessage: string,
   contextData?: string,
+  portfolioContext?: string,
 ): Promise<string> {
   const messages: Anthropic.MessageParam[] = []
+
+  const portfolioBlock = portfolioContext ? `\n\nUser's current portfolio:\n${portfolioContext}` : ''
 
   // Add original context as first user message if not already in history
   if (history.length === 0) {
     messages.push({
       role: 'user',
-      content: `Research question: ${originalQuestion}${contextData ? `\n\nAnalysis context:\n${contextData}` : ''}`,
+      content: `Research question: ${originalQuestion}${portfolioBlock}${contextData ? `\n\nAnalysis context:\n${contextData}` : ''}`,
     })
   } else {
-    // Reconstruct history
-    for (const m of history) {
+    // Inject portfolio context into the first message of history
+    const [first, ...rest] = history
+    messages.push({
+      role: first.role,
+      content: first.content + (portfolioBlock && !first.content.includes('current portfolio') ? portfolioBlock : ''),
+    })
+    for (const m of rest) {
       messages.push({ role: m.role, content: m.content })
     }
   }

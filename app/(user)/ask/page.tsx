@@ -33,6 +33,16 @@ type MiroFishResult = {
   peg_5y: number | null
   live_price: number | null
 }
+type Holding = {
+  symbol: string
+  sector: string | null
+  market_cap_category: string
+  quantity: number
+  avg_price: number
+  ltp: number
+  pnl_pct: number
+  current_value: number
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const AGENT_COLORS: Record<string, string> = {
@@ -63,6 +73,17 @@ function markdownToHtml(md: string): string {
     .replace(/$/, '</p>')
 }
 
+function buildPortfolioContext(holdings: Holding[], summary: { total_invested: number; total_current: number; total_pnl_pct: number } | null): string {
+  if (!holdings.length) return ''
+  const rows = holdings.map(h =>
+    `${h.symbol} | ${h.sector ?? 'Unknown'} | ${h.market_cap_category} | Qty ${h.quantity} | Avg ₹${h.avg_price.toFixed(0)} | LTP ₹${h.ltp.toFixed(0)} | P&L ${h.pnl_pct >= 0 ? '+' : ''}${h.pnl_pct.toFixed(1)}%`
+  ).join('\n')
+  const totals = summary
+    ? `Total value: ₹${(summary.total_current / 1e5).toFixed(2)}L | Invested: ₹${(summary.total_invested / 1e5).toFixed(2)}L | Overall return: ${summary.total_pnl_pct >= 0 ? '+' : ''}${summary.total_pnl_pct.toFixed(2)}%`
+    : ''
+  return `${rows}\n${totals}`
+}
+
 // ─── Analysis card ─────────────────────────────────────────────────────────
 function AnalysisCard({ data }: { data: MiroFishResult }) {
   const c = data.composite
@@ -78,59 +99,69 @@ function AnalysisCard({ data }: { data: MiroFishResult }) {
           {data.screener?.sector && (
             <span className="ml-2 text-xs" style={{ color: 'var(--muted)' }}>{data.screener.sector}</span>
           )}
-          <span className="ml-2 text-sm" style={{ color: 'var(--muted)' }}>· {c}/10</span>
+          {cmp && (
+            <span className="ml-2 text-xs font-semibold text-white">₹{cmp.toFixed(0)}</span>
+          )}
         </div>
-        <span className="text-xs font-medium px-2 py-1 rounded-md"
-          style={{ color: vCol, background: vBg }}>
-          {data.verdict?.split('—')[0]?.trim() ?? 'HOLD'}
-        </span>
+        <div className="text-center rounded-lg px-3 py-1" style={{ background: vBg }}>
+          <p className="text-lg font-bold" style={{ color: vCol }}>{c}/10</p>
+          <p className="text-xs font-medium truncate max-w-[80px]" style={{ color: vCol }}>{data.verdict}</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-xs">
-        {([
-          ['PE',      data.screener?.pe      != null ? `${data.screener.pe}x`          : '—'],
-          ['ROE',     data.screener?.roe     != null ? `${data.screener.roe}%`         : '—'],
-          ['5Y CAGR', data.screener?.pat_cagr_5y != null ? `${data.screener.pat_cagr_5y}%` : '—'],
-          ['PEG',     data.peg_5y != null           ? String(data.peg_5y)              : '—'],
-          ['CMP',     cmp                           ? `₹${cmp}`                        : '—'],
-          ['Cap',     data.screener?.market_cap_category ?? '—'],
-        ] as [string, string][]).map(([label, val]) => (
-          <div key={label} className="rounded px-2 py-1.5" style={{ background: 'rgba(22,199,132,0.05)', border: '1px solid var(--border)' }}>
-            <p className="text-xs" style={{ color: 'var(--muted)' }}>{label}</p>
-            <p className="text-white font-medium">{val}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="space-y-1">
+      {/* Agent scores */}
+      <div className="flex flex-wrap gap-1.5">
         {data.agents?.map(a => (
-          <div key={a.agent} className="flex items-center gap-2 text-xs">
-            <span className="w-14 font-mono font-bold" style={{ color: AGENT_COLORS[a.agent] ?? 'white' }}>{a.agent}</span>
-            <span className="font-mono" style={{ color: 'var(--green)' }}>
-              {'█'.repeat(Math.round(a.score))}<span style={{ color: 'var(--border)' }}>{'░'.repeat(10 - Math.round(a.score))}</span>
-            </span>
-            <span className="text-xs" style={{ color: 'var(--muted)' }}>{a.score}/10</span>
-            <span className="flex-1 truncate text-xs" style={{ color: 'var(--muted)' }}>{a.reasoning}</span>
-          </div>
+          <span key={a.agent} className="text-xs rounded px-2 py-0.5 font-medium"
+            style={{ background: `${AGENT_COLORS[a.agent]}18`, color: AGENT_COLORS[a.agent] ?? 'white' }}>
+            {a.agent} {a.score}
+          </span>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        <div>
-          <p className="font-medium mb-1" style={{ color: 'var(--green)' }}>Bull case</p>
-          {data.bull_case?.map((b, i) => <p key={i} className="mb-0.5" style={{ color: 'var(--muted)' }}>+ {b}</p>)}
+      {/* Key metrics */}
+      {data.screener && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {[
+            ['PE', data.screener.pe ? `${data.screener.pe}x` : '—'],
+            ['ROE', data.screener.roe ? `${data.screener.roe}%` : '—'],
+            ['ROCE', data.screener.roce ? `${data.screener.roce}%` : '—'],
+            ['5Y CAGR', data.screener.pat_cagr_5y ? `${data.screener.pat_cagr_5y}%` : '—'],
+          ].map(([k, v]) => (
+            <div key={k} className="rounded-lg p-2" style={{ background: 'rgba(22,199,132,0.04)', border: '1px solid var(--border)' }}>
+              <p className="text-xs" style={{ color: 'var(--muted)' }}>{k}</p>
+              <p className="text-xs font-semibold text-white">{v}</p>
+            </div>
+          ))}
         </div>
-        <div>
-          <p className="font-medium mb-1 text-red-400">Bear case</p>
-          {data.bear_case?.map((b, i) => <p key={i} className="mb-0.5" style={{ color: 'var(--muted)' }}>− {b}</p>)}
-        </div>
+      )}
+
+      {/* Bull / Bear */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+        {data.bull_case?.length > 0 && (
+          <div>
+            <p className="font-semibold mb-1" style={{ color: 'var(--green)' }}>Bull</p>
+            {data.bull_case.slice(0, 2).map((b, i) => (
+              <p key={i} style={{ color: 'var(--muted)' }}>• {b}</p>
+            ))}
+          </div>
+        )}
+        {data.bear_case?.length > 0 && (
+          <div>
+            <p className="font-semibold mb-1" style={{ color: '#f87171' }}>Bear</p>
+            {data.bear_case.slice(0, 2).map((b, i) => (
+              <p key={i} style={{ color: 'var(--muted)' }}>• {b}</p>
+            ))}
+          </div>
+        )}
       </div>
 
-      {data.entry && (
-        <div className="flex gap-4 text-xs pt-2" style={{ borderTop: '1px solid var(--border)' }}>
-          <span style={{ color: 'var(--muted)' }}>Entry <strong className="text-white">₹{data.entry}</strong></span>
-          {data.stop    && <span style={{ color: 'var(--muted)' }}>Stop <strong className="text-red-400">₹{data.stop}</strong></span>}
-          {data.target1 && <span style={{ color: 'var(--muted)' }}>T1 <strong style={{ color: 'var(--green)' }}>₹{data.target1}</strong></span>}
+      {/* Trade setup */}
+      {(data.entry || data.stop || data.target1) && (
+        <div className="flex flex-wrap gap-3 text-xs pt-1" style={{ borderTop: '1px solid var(--border)' }}>
+          {data.entry   && <span style={{ color: 'var(--muted)' }}>Entry <strong className="text-white">₹{data.entry}</strong></span>}
+          {data.stop    && <span style={{ color: 'var(--muted)' }}>Stop <strong style={{ color: '#f87171' }}>₹{data.stop}</strong></span>}
+          {data.target1 && <span style={{ color: 'var(--muted)' }}>Target <strong style={{ color: 'var(--green)' }}>₹{data.target1}</strong></span>}
           {data.rr      && <span style={{ color: 'var(--muted)' }}>R:R <strong className="text-white">{data.rr}x</strong></span>}
         </div>
       )}
@@ -138,15 +169,14 @@ function AnalysisCard({ data }: { data: MiroFishResult }) {
   )
 }
 
-// ─── Message bubble ──────────────────────────────────────────────────────────
+// ─── Message bubble ─────────────────────────────────────────────────────────
 function MessageBubble({ msg }: { msg: Message }) {
-  const isUser = msg.role === 'user'
   const mirofish: MiroFishResult[] = msg.metadata?.mirofish ?? []
 
-  if (isUser) {
+  if (msg.role === 'user') {
     return (
-      <div className="flex justify-end mb-4">
-        <div className="max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-3 text-sm text-white"
+      <div className="mb-4 flex justify-end">
+        <div className="max-w-[80%] text-sm px-4 py-3 rounded-2xl text-white"
           style={{ background: 'rgba(22,199,132,0.18)', border: '1px solid rgba(22,199,132,0.3)' }}>
           {msg.content}
         </div>
@@ -193,10 +223,10 @@ function Spinner({ label }: { label: string }) {
 
 // ─── Examples ────────────────────────────────────────────────────────────────
 const EXAMPLES = [
-  'What is your read on Muthoot Finance for the long term?',
+  'How is my current portfolio positioned — any sector risks?',
+  'Which of my holdings should I consider trimming?',
+  'Is GRSE a buy at current levels? What is the long term view?',
   'Compare HDFC Bank vs Shriram Finance for a 3 year hold',
-  'Is BSE Ltd a buy at current levels?',
-  'Should I add more to GRSE or book profits?',
 ]
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -217,9 +247,24 @@ export default function ResearchPage() {
   const [submitError, setSubmitError] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
+  // Portfolio context for AI
+  const [portfolioCtx, setPortfolioCtx] = useState('')
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const followUpRef = useRef<HTMLTextAreaElement>(null)
+
+  // Fetch portfolio once on mount — used as context for all AI questions
+  useEffect(() => {
+    fetch('/api/kite/portfolio')
+      .then(r => r.json())
+      .then(d => {
+        if (d.holdings?.length) {
+          setPortfolioCtx(buildPortfolioContext(d.holdings, d.summary))
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Load conversation list
   const loadConversations = useCallback(async () => {
@@ -281,7 +326,7 @@ export default function ResearchPage() {
     const res = await fetch('/api/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: draft.trim() }),
+      body: JSON.stringify({ question: draft.trim(), portfolioContext: portfolioCtx || undefined }),
     })
 
     if (!res.ok) {
@@ -308,7 +353,7 @@ export default function ResearchPage() {
     const res = await fetch(`/api/questions/${activeId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: followUp.trim() }),
+      body: JSON.stringify({ content: followUp.trim(), portfolioContext: portfolioCtx || undefined }),
     })
 
     setFollowUp('')
@@ -322,33 +367,35 @@ export default function ResearchPage() {
   const activeConversation = conversations.find(c => c.id === activeId)
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 56px)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: 'calc(100vh - 56px)', overflow: 'hidden', position: 'relative' }}>
 
       {/* ── Mobile overlay ── */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-20 md:hidden"
-          style={{ background: 'rgba(0,0,0,0.6)' }}
+          style={{ background: 'rgba(0,0,0,0.6)', top: '56px' }}
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* ── Left sidebar ── */}
       <aside
-        className={`
-          fixed md:static z-30 md:z-auto top-14 bottom-0 left-0
-          flex flex-col transition-transform duration-200
-          md:translate-x-0
-        `}
         style={{
           width: 260,
+          flexShrink: 0,
           background: 'var(--bg-card)',
           borderRight: '1px solid var(--border)',
-          transform: sidebarOpen ? 'translateX(0)' : undefined,
-          ...(typeof window !== 'undefined' && window.innerWidth < 768 && !sidebarOpen
-            ? { transform: 'translateX(-100%)' }
-            : {}),
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'fixed' as const,
+          top: 56,
+          bottom: 0,
+          left: 0,
+          zIndex: 30,
+          transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+          transition: 'transform 0.2s ease',
         }}
+        className="md:translate-x-0 md:static md:z-auto"
       >
         <div className="p-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
           <button
@@ -402,39 +449,52 @@ export default function ResearchPage() {
         </div>
       </aside>
 
-      {/* ── Main area ── */}
-      <main className="flex-1 flex flex-col min-w-0" style={{ background: 'var(--bg)' }}>
+      {/* ── Main area (offset for desktop sidebar) ── */}
+      <main
+        className="flex flex-col min-w-0 flex-1"
+        style={{ background: 'var(--bg)', marginLeft: 0 }}
+      >
+        {/* Desktop sidebar spacer */}
+        <style>{`@media (min-width: 768px) { main { margin-left: 260px; } }`}</style>
 
         {/* Mobile header bar */}
-        <div className="md:hidden flex items-center gap-3 px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="md:hidden flex items-center gap-3 px-4 py-3 flex-shrink-0"
+          style={{ borderBottom: '1px solid var(--border)' }}>
           <button onClick={() => setSidebarOpen(s => !s)}
-            className="text-white p-1 rounded"
+            className="text-white p-1.5 rounded"
             style={{ border: '1px solid var(--border)' }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 6h18M3 12h18M3 18h18" />
             </svg>
           </button>
-          <span className="text-sm font-medium text-white truncate">
+          <span className="text-sm font-medium text-white truncate flex-1">
             {isCompose ? 'New Research' : (activeConversation?.question ?? 'Research')}
           </span>
+          {!isCompose && (
+            <button onClick={startNew}
+              className="text-xs font-semibold px-3 py-1.5 rounded-lg flex-shrink-0"
+              style={{ background: 'var(--green)', color: '#000' }}>
+              + New
+            </button>
+          )}
         </div>
 
         {/* ── Compose form (new question) ── */}
         {isCompose && (
-          <div className="flex-1 flex flex-col items-center justify-center px-4 py-10">
+          <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 overflow-y-auto">
             <div className="w-full max-w-2xl">
-              <h1 className="text-2xl font-bold text-white mb-1">Stock Research</h1>
-              <p className="text-sm mb-8" style={{ color: 'var(--muted)' }}>
-                Ask about Indian stocks, portfolio management, or investment strategies.
+              <h1 className="text-xl font-bold text-white mb-1">Stock Research</h1>
+              <p className="text-sm mb-6" style={{ color: 'var(--muted)' }}>
+                Ask about your portfolio, Indian stocks, or investment strategies.
               </p>
 
               <form onSubmit={submitQuestion} className="space-y-3">
                 <div className="relative">
                   <textarea
                     ref={textareaRef}
-                    className="w-full rounded-2xl px-5 py-4 text-white text-sm resize-none focus:outline-none min-h-[120px]"
-                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}
-                    placeholder="Ask anything about Indian stocks…"
+                    className="w-full rounded-2xl px-4 py-4 text-white text-sm resize-none focus:outline-none"
+                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border)', minHeight: 100 }}
+                    placeholder="Ask anything about your portfolio or Indian stocks…"
                     value={draft}
                     onChange={e => setDraft(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitQuestion(e as any) }}
@@ -444,7 +504,7 @@ export default function ResearchPage() {
                   <button
                     type="submit"
                     disabled={submitting || !draft.trim()}
-                    className="absolute bottom-3 right-3 px-4 py-2 text-sm font-semibold rounded-xl transition-opacity disabled:opacity-40"
+                    className="absolute bottom-3 right-3 px-3 py-1.5 text-sm font-semibold rounded-xl transition-opacity disabled:opacity-40"
                     style={{ background: 'var(--green)', color: '#000' }}
                   >
                     {submitting ? (
@@ -465,14 +525,14 @@ export default function ResearchPage() {
               </form>
 
               {!submitting && (
-                <div className="mt-8">
+                <div className="mt-6">
                   <p className="text-xs uppercase tracking-wider mb-3" style={{ color: 'var(--muted)' }}>Try asking</p>
                   <div className="space-y-2">
                     {EXAMPLES.map(ex => (
                       <button key={ex} onClick={() => setDraft(ex)}
                         className="w-full text-left text-sm rounded-xl px-4 py-2.5 transition-all"
                         style={cardStyle}
-                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--green-dim)')}
+                        onMouseEnter={e => ((e.currentTarget as HTMLElement).style.borderColor = 'rgba(22,199,132,0.4)')}
                         onMouseLeave={e => ((e.currentTarget as HTMLElement).style.borderColor = 'var(--border)')}>
                         <span style={{ color: 'var(--muted)' }}>{ex}</span>
                       </button>
@@ -487,13 +547,13 @@ export default function ResearchPage() {
         {/* ── Conversation thread ── */}
         {!isCompose && activeId && (
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Conversation header */}
-            <div className="flex-shrink-0 px-6 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
+            {/* Conversation header — desktop only */}
+            <div className="hidden md:block flex-shrink-0 px-6 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
               <p className="text-sm font-medium text-white truncate">
                 {activeConversation?.question ?? '…'}
               </p>
               {activeConversation?.tickers?.length ? (
-                <div className="flex gap-1 mt-1">
+                <div className="flex gap-1 mt-1 flex-wrap">
                   {activeConversation.tickers.map(t => (
                     <span key={t} className="text-xs rounded px-1.5 py-0.5"
                       style={{ background: 'rgba(22,199,132,0.1)', color: 'var(--green)' }}>
@@ -505,7 +565,7 @@ export default function ResearchPage() {
             </div>
 
             {/* Messages scrollable area */}
-            <div className="flex-1 overflow-y-auto px-6 py-6 max-w-3xl mx-auto w-full">
+            <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 md:py-6 max-w-3xl mx-auto w-full">
               {msgLoading && (
                 <div className="space-y-3">
                   {[1,2,3].map(i => (
@@ -523,13 +583,14 @@ export default function ResearchPage() {
             </div>
 
             {/* Follow-up input */}
-            <div className="flex-shrink-0 px-4 pb-4 pt-2 max-w-3xl mx-auto w-full">
+            <div className="flex-shrink-0 px-3 md:px-4 pb-3 md:pb-4 pt-2 max-w-3xl mx-auto w-full">
               <form onSubmit={submitFollowUp}
                 className="flex items-end gap-2 rounded-2xl p-3"
                 style={{ background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
                 <textarea
                   ref={followUpRef}
-                  className="flex-1 bg-transparent text-white text-sm resize-none focus:outline-none min-h-[36px] max-h-32"
+                  className="flex-1 bg-transparent text-white text-sm resize-none focus:outline-none"
+                  style={{ minHeight: 36, maxHeight: 128 }}
                   placeholder="Ask a follow-up…"
                   value={followUp}
                   onChange={e => setFollowUp(e.target.value)}
@@ -550,7 +611,7 @@ export default function ResearchPage() {
                   </svg>
                 </button>
               </form>
-              <p className="text-xs text-center mt-2" style={{ color: 'var(--muted)' }}>
+              <p className="text-xs text-center mt-1.5" style={{ color: 'var(--muted)' }}>
                 Enter to send · Shift+Enter for new line
               </p>
             </div>
@@ -560,7 +621,7 @@ export default function ResearchPage() {
         {/* Empty state */}
         {!isCompose && !activeId && conversations.length > 0 && (
           <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
+            <div className="text-center px-4">
               <p style={{ color: 'var(--muted)' }} className="text-sm mb-4">Select a conversation or start a new one</p>
               <button onClick={startNew}
                 className="text-sm font-semibold px-4 py-2 rounded-xl"

@@ -71,6 +71,7 @@ export async function POST(
   const { id } = await params
   const body = await req.json()
   const content: string = body.content?.trim()
+  const portfolioContext: string | undefined = body.portfolioContext
 
   if (!content || content.length < 2) {
     return NextResponse.json({ error: 'Message too short' }, { status: 400 })
@@ -119,7 +120,7 @@ export async function POST(
   }))
 
   // Get AI response
-  const aiContent = await continueConversation(question.question, history, content)
+  const aiContent = await continueConversation(question.question, history, content, undefined, portfolioContext)
 
   // Save AI response
   const { data: aiMsg } = await supabase
