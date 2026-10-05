@@ -27,10 +27,14 @@ function parseNumber(text: string): number | null {
   return isNaN(n) ? null : n
 }
 
+// SEBI-aligned thresholds (July 2024 list):
+// Large Cap = top 100 by market cap → ~₹60,000 Cr+
+// Mid Cap = 101-250 → ~₹15,000-60,000 Cr
+// Small Cap = 251+ → < ₹15,000 Cr
 function getMarketCapCategory(mcap: number | null): MarketCapCategory {
   if (!mcap) return 'Unknown'
-  if (mcap >= 20000) return 'Large Cap'
-  if (mcap >= 5000)  return 'Mid Cap'
+  if (mcap >= 60000) return 'Large Cap'
+  if (mcap >= 15000) return 'Mid Cap'
   return 'Small Cap'
 }
 

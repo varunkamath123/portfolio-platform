@@ -3,7 +3,20 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { decrypt } from '@/lib/encryption'
 import { getKiteHoldings, isTokenValid } from '@/lib/kite'
-import { fetchScreenerData } from '@/lib/screener'
+import { fetchScreenerData, type MarketCapCategory } from '@/lib/screener'
+
+// Known ETF metadata overrides — Screener.in doesn't classify ETFs correctly
+const ETF_OVERRIDES: Record<string, { sector: string; market_cap_category: MarketCapCategory | 'Precious Metals' | 'ETF' }> = {
+  GOLDBEES:    { sector: 'Precious Metals', market_cap_category: 'Precious Metals' },
+  GOLDIETF:    { sector: 'Precious Metals', market_cap_category: 'Precious Metals' },
+  SILVERBEES:  { sector: 'Precious Metals', market_cap_category: 'Precious Metals' },
+  SILVERIETF:  { sector: 'Precious Metals', market_cap_category: 'Precious Metals' },
+  LIQUIDBEES:  { sector: 'Liquid ETF',      market_cap_category: 'ETF' },
+  NIFTYBEES:   { sector: 'Index ETF',       market_cap_category: 'ETF' },
+  JUNIORBEES:  { sector: 'Index ETF',       market_cap_category: 'ETF' },
+  BANKBEES:    { sector: 'Index ETF',       market_cap_category: 'ETF' },
+  CPSEETF:     { sector: 'Index ETF',       market_cap_category: 'ETF' },
+}
 
 export async function GET() {
   const { userId } = await auth()
@@ -49,6 +62,7 @@ export async function GET() {
 
   const enriched = holdings.map((h, i) => {
     const sr = screenerResults[i]?.status === 'fulfilled' ? screenerResults[i].value : null
+    const etf = ETF_OVERRIDES[h.tradingsymbol]
 
     return {
       symbol:               h.tradingsymbol,
@@ -61,8 +75,8 @@ export async function GET() {
       pnl:                  h.pnl,
       pnl_pct:              h.average_price > 0 ? ((h.last_price / h.average_price - 1) * 100) : 0,
       day_change_pct:       h.day_change_percentage,
-      sector:               sr?.sector ?? null,
-      market_cap_category:  sr?.market_cap_category ?? 'Unknown',
+      sector:               etf?.sector ?? sr?.sector ?? null,
+      market_cap_category:  etf?.market_cap_category ?? sr?.market_cap_category ?? 'Unknown',
       market_cap_cr:        sr?.market_cap_cr ?? null,
       pe:                   sr?.pe ?? null,
       roe:                  sr?.roe ?? null,

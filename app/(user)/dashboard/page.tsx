@@ -8,7 +8,7 @@ type Holding = {
   current_value: number; invested_value: number
   pnl: number; pnl_pct: number; day_change_pct: number
   sector: string | null
-  market_cap_category: 'Large Cap' | 'Mid Cap' | 'Small Cap' | 'Unknown'
+  market_cap_category: 'Large Cap' | 'Mid Cap' | 'Small Cap' | 'Precious Metals' | 'ETF' | 'Unknown'
 }
 type Summary = {
   total_invested: number; total_current: number
@@ -33,15 +33,17 @@ const cardStyle = { background: 'var(--bg-card)', border: '1px solid var(--borde
 
 function CapBadge({ cat }: { cat: string }) {
   const colors: Record<string, { bg: string; color: string }> = {
-    'Large Cap': { bg: 'rgba(22,199,132,0.12)', color: 'var(--green)' },
-    'Mid Cap':   { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
-    'Small Cap': { bg: 'rgba(248,113,113,0.12)', color: '#f87171' },
-    'Unknown':   { bg: 'rgba(107,143,107,0.12)', color: 'var(--muted)' },
+    'Large Cap':       { bg: 'rgba(22,199,132,0.12)', color: 'var(--green)' },
+    'Mid Cap':         { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
+    'Small Cap':       { bg: 'rgba(248,113,113,0.12)', color: '#f87171' },
+    'Precious Metals': { bg: 'rgba(234,179,8,0.12)',  color: '#eab308' },
+    'ETF':             { bg: 'rgba(96,165,250,0.12)',  color: '#60a5fa' },
+    'Unknown':         { bg: 'rgba(107,143,107,0.12)', color: 'var(--muted)' },
   }
   const style = colors[cat] ?? colors['Unknown']
   return (
     <span className="text-xs rounded px-1.5 py-0.5 font-medium" style={{ ...style, whiteSpace: 'nowrap' }}>
-      {cat === 'Unknown' ? '—' : cat.replace(' Cap', '')}
+      {cat === 'Unknown' ? '—' : cat}
     </span>
   )
 }
