@@ -79,6 +79,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<{ message: string; needs_refresh?: boolean; needs_connect?: boolean } | null>(null)
   const [health, setHealth] = useState<HealthData | null>(null)
   const [healthLoading, setHealthLoading] = useState(false)
+  const [healthError, setHealthError] = useState(false)
 
   useEffect(() => {
     fetch('/api/kite/portfolio')
@@ -98,8 +99,12 @@ export default function DashboardPage() {
             body: JSON.stringify({ holdings: d.holdings }),
           })
             .then(r => r.json())
-            .then(h => { setHealth(h); setHealthLoading(false) })
-            .catch(() => setHealthLoading(false))
+            .then(h => {
+              if (h?.health_score !== undefined) { setHealth(h) }
+              else { setHealthError(true) }
+              setHealthLoading(false)
+            })
+            .catch(() => { setHealthError(true); setHealthLoading(false) })
         }
       })
       .catch(() => { window.location.href = '/onboarding' })
@@ -227,7 +232,7 @@ export default function DashboardPage() {
       )}
 
       {/* ── Portfolio Health ── */}
-      {(healthLoading || health) && (
+      {(healthLoading || health || healthError) && (
         <div className="mb-8">
           <h2 className="font-semibold text-white mb-4">Portfolio Health</h2>
           {healthLoading && !health && (
@@ -241,6 +246,13 @@ export default function DashboardPage() {
                   Analysing portfolio health…
                 </p>
               </div>
+            </div>
+          )}
+          {healthError && !health && (
+            <div className="rounded-xl p-6" style={cardStyle}>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>
+                Health analysis unavailable — try refreshing the page.
+              </p>
             </div>
           )}
           {health && (
