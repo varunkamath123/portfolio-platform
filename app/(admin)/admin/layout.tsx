@@ -10,9 +10,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (!isAdmin) redirect('/dashboard')
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
       <Nav isAdmin />
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">{children}</main>
+      <main className="flex-1 max-w-5xl mx-auto w-full px-4 py-8">{children}</main>
     </div>
   )
 }

@@ -1,8 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase'
-import { getFyersFunds } from '@/lib/fyers'
-import { decrypt } from '@/lib/encryption'
+import { isTokenValid } from '@/lib/kite'
 import { UserTable } from '@/components/UserTable'
-import { formatCurrency } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,54 +10,46 @@ export default async function AdminPage() {
     .select('id, clerk_user_id, email, full_name, is_active, is_admin, created_at')
     .order('created_at', { ascending: false })
 
-  const enriched = await Promise.all(
-    (users ?? []).map(async u => {
-      const { data: creds } = await supabaseAdmin
-        .from('fyers_credentials')
-        .select('client_id, access_token_enc, token_expiry, is_connected')
+  const enriched = await Promise.all((users ?? []).map(async u => {
+    const [credsResult, qResult] = await Promise.all([
+      supabaseAdmin
+        .from('kite_credentials')
+        .select('is_connected, token_date')
         .eq('user_id', u.id)
-        .single()
+        .single(),
+      supabaseAdmin
+        .from('questions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', u.id),
+    ])
 
-      let balance = null
-      let connected = false
+    const creds = credsResult.data
+    const kite_connected = !!(creds?.is_connected && isTokenValid(creds.token_date))
 
-      if (creds?.is_connected && creds.access_token_enc) {
-        const tokenOk = !creds.token_expiry || new Date(creds.token_expiry) > new Date()
-        if (tokenOk) {
-          try {
-            balance = await getFyersFunds(creds.client_id, decrypt(creds.access_token_enc))
-            connected = true
-          } catch { /* ignore */ }
-        }
-      }
+    return { ...u, kite_connected, question_count: qResult.count ?? 0 }
+  }))
 
-      return { ...u, balance, connected }
-    })
-  )
+  const totalUsers    = enriched.length
+  const activeUsers   = enriched.filter(u => u.is_active).length
+  const kiteConnected = enriched.filter(u => u.kite_connected).length
+  const totalQuestions = enriched.reduce((s, u) => s + (u.question_count ?? 0), 0)
 
-  // Totals across all connected users
-  const totalBalance   = enriched.reduce((s, u) => s + (u.balance?.total_balance ?? 0), 0)
-  const totalAvailable = enriched.reduce((s, u) => s + (u.balance?.available_margin ?? 0), 0)
-  const totalMarginUsed = enriched.reduce((s, u) => s + (u.balance?.used_margin ?? 0), 0)
-  const connectedCount = enriched.filter(u => u.connected).length
+  const cardStyle = { background: 'var(--bg-card)', border: '1px solid var(--border)' }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-gray-900">Admin — All Users</h1>
+      <h1 className="text-xl font-bold text-white">Users</h1>
 
-      {/* Portfolio summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Users',   value: String(enriched.length),    mono: false },
-          { label: 'Connected',     value: String(connectedCount),      mono: false },
-          { label: 'Total AUM',     value: formatCurrency(totalBalance), mono: true },
-          { label: 'Margin Used',   value: formatCurrency(totalMarginUsed), mono: true },
+          { label: 'Total Users',    value: totalUsers,     color: 'white' },
+          { label: 'Active',         value: activeUsers,    color: 'var(--green)' },
+          { label: 'Kite Connected', value: kiteConnected,  color: '#60a5fa' },
+          { label: 'Questions Asked',value: totalQuestions, color: '#f59e0b' },
         ].map(c => (
-          <div key={c.label} className="rounded-xl border border-gray-200 bg-white shadow-sm p-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">{c.label}</p>
-            <p className={`text-xl font-semibold ${c.mono ? 'tabular-nums' : ''} text-gray-900`}>
-              {c.value}
-            </p>
+          <div key={c.label} className="rounded-xl p-4" style={cardStyle}>
+            <p className="text-xs uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>{c.label}</p>
+            <p className="text-2xl font-bold" style={{ color: c.color }}>{c.value}</p>
           </div>
         ))}
       </div>

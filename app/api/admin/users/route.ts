@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { supabaseAdmin } from '@/lib/supabase'
-import { getFyersFunds } from '@/lib/fyers'
-import { decrypt } from '@/lib/encryption'
+import { isTokenValid } from '@/lib/kite'
 
-// GET /api/admin/users — returns all users with live Fyers balance
-// Only callable by admins (middleware redirects non-admins)
+function isAdmin(sessionClaims: unknown) {
+  return (sessionClaims as Record<string, unknown>)?.role === 'admin'
+}
+
+// GET /api/admin/users
 export async function GET() {
   const { userId, sessionClaims } = await auth()
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const isAdmin = (sessionClaims?.metadata as Record<string, unknown>)?.role === 'admin'
-  if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!userId || !isAdmin(sessionClaims?.metadata)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { data: users } = await supabaseAdmin
     .from('user_profiles')
@@ -20,51 +21,43 @@ export async function GET() {
 
   if (!users) return NextResponse.json([])
 
-  // Fetch balances in parallel
-  const results = await Promise.allSettled(
-    users.map(async user => {
-      const { data: creds } = await supabaseAdmin
-        .from('fyers_credentials')
-        .select('client_id, access_token_enc, token_expiry, is_connected')
-        .eq('user_id', user.id)
-        .single()
+  const enriched = await Promise.all(users.map(async u => {
+    const [credsResult, qResult] = await Promise.all([
+      supabaseAdmin
+        .from('kite_credentials')
+        .select('is_connected, token_date')
+        .eq('user_id', u.id)
+        .single(),
+      supabaseAdmin
+        .from('questions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', u.id),
+    ])
 
-      let balance = null
-      let connected = false
+    const creds = credsResult.data
+    const kite_connected = !!(creds?.is_connected && isTokenValid(creds.token_date))
 
-      if (creds?.is_connected && creds.access_token_enc) {
-        const tokenOk = !creds.token_expiry || new Date(creds.token_expiry) > new Date()
-        if (tokenOk) {
-          try {
-            balance = await getFyersFunds(creds.client_id, decrypt(creds.access_token_enc))
-            connected = true
-          } catch {
-            // Balance fetch failed — return null
-          }
-        }
-      }
+    return {
+      ...u,
+      kite_connected,
+      question_count: qResult.count ?? 0,
+    }
+  }))
 
-      return { ...user, balance, connected }
-    })
-  )
-
-  const data = results.map((r, i) =>
-    r.status === 'fulfilled' ? r.value : { ...users[i], balance: null, connected: false }
-  )
-
-  return NextResponse.json(data)
+  return NextResponse.json(enriched)
 }
 
-// PATCH /api/admin/users — toggle is_active for a user
+// PATCH /api/admin/users — block or unblock a user
 export async function PATCH(req: NextRequest) {
   const { userId, sessionClaims } = await auth()
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const isAdmin = (sessionClaims?.metadata as Record<string, unknown>)?.role === 'admin'
-  if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!userId || !isAdmin(sessionClaims?.metadata)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { user_id, is_active } = await req.json()
-  if (!user_id) return NextResponse.json({ error: 'user_id required' }, { status: 400 })
+  if (!user_id || typeof is_active !== 'boolean') {
+    return NextResponse.json({ error: 'user_id and is_active required' }, { status: 400 })
+  }
 
   const { error } = await supabaseAdmin
     .from('user_profiles')
