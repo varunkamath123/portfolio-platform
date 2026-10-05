@@ -18,7 +18,7 @@ type HealthData = {
   health_score: number
   summary: string
   sector_concentration: { sector: string; allocation_pct: number }[]
-  growth_outlook: string
+  growth_outlook: string | string[]
   risks: string[]
   opportunities: string[]
 }
@@ -283,9 +283,17 @@ export default function DashboardPage() {
                 {/* Outlook card */}
                 <div className="rounded-xl p-5" style={cardStyle}>
                   <HealthLabel>2–3 Quarter Outlook</HealthLabel>
-                  <p className="mt-2 text-sm leading-relaxed" style={{ color: '#c8dfc8' }}>
-                    {health.growth_outlook}
-                  </p>
+                  <ul className="mt-3 space-y-2">
+                    {(Array.isArray(health.growth_outlook)
+                      ? health.growth_outlook
+                      : health.growth_outlook.split(/\.\s+/).filter(Boolean)
+                    ).map((item, i) => (
+                      <li key={i} className="flex gap-2 text-sm leading-snug">
+                        <span className="mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }}>◆</span>
+                        <span style={{ color: '#c8dfc8' }}>{item.replace(/\.$/, '')}</span>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </div>
 

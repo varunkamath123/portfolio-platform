@@ -262,7 +262,7 @@ Return ONLY this JSON:
   "health_score": 0-100 integer,
   "summary": "2-3 sentence portfolio health summary mentioning concentration, quality, and outlook",
   "sector_concentration": [{"sector": "name", "allocation_pct": number}],
-  "growth_outlook": "2-3 sentence Q2-Q4 2026 earnings and price outlook based on sector trends and individual stock CAGR data",
+  "growth_outlook": ["one sector/stock insight per item, e.g. 'EICHERMOT: margin pressure from EV transition costs into H2 FY26'", "item 2", "item 3"],
   "risks": ["risk 1", "risk 2", "risk 3"],
   "opportunities": ["opportunity 1", "opportunity 2"]
 }`
