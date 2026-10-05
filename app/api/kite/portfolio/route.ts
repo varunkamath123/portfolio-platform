@@ -2,7 +2,7 @@ import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { decrypt } from '@/lib/encryption'
-import { getKiteHoldings, isTokenValid } from '@/lib/kite'
+import { getKiteHoldings, getKiteAppCreds, isAdminClaims, isTokenValid } from '@/lib/kite'
 import { fetchScreenerData, type MarketCapCategory } from '@/lib/screener'
 
 // Known ETF metadata overrides — Screener.in doesn't classify ETFs correctly
@@ -19,7 +19,7 @@ const ETF_OVERRIDES: Record<string, { sector: string; market_cap_category: Marke
 }
 
 export async function GET() {
-  const { userId } = await auth()
+  const { userId, sessionClaims } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: profile } = await supabase
@@ -44,11 +44,11 @@ export async function GET() {
     return NextResponse.json({ error: 'Kite token expired — please reconnect', needs_refresh: true }, { status: 401 })
   }
 
-  const apiKey = process.env.KITE_API_KEY
-  if (!apiKey) return NextResponse.json({ error: 'KITE_API_KEY not configured' }, { status: 500 })
+  const app = await getKiteAppCreds(profile.id, isAdminClaims(sessionClaims))
+  if (!app) return NextResponse.json({ error: 'Kite not connected', needs_connect: true }, { status: 400 })
 
   const accessToken = decrypt(creds.access_token_enc)
-  const holdings = await getKiteHoldings(apiKey, accessToken)
+  const holdings = await getKiteHoldings(app.apiKey, accessToken)
 
   // Enrich with sector + market cap category from Screener (parallel, timeout-guarded)
   const screenerResults = await Promise.allSettled(

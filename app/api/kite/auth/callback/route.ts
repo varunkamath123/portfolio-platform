@@ -2,10 +2,10 @@ import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { encrypt } from '@/lib/encryption'
-import { exchangeRequestToken } from '@/lib/kite'
+import { exchangeRequestToken, getKiteAppCreds, isAdminClaims } from '@/lib/kite'
 
 export async function GET(req: NextRequest) {
-  const { userId } = await auth()
+  const { userId, sessionClaims } = await auth()
   if (!userId) return NextResponse.redirect(new URL('/sign-in', req.url))
 
   const requestToken = req.nextUrl.searchParams.get('request_token')
@@ -16,10 +16,6 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const apiKey = process.env.KITE_API_KEY
-    const apiSecret = process.env.KITE_API_SECRET
-    if (!apiKey || !apiSecret) throw new Error('Kite credentials not configured')
-
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('id')
@@ -28,7 +24,10 @@ export async function GET(req: NextRequest) {
 
     if (!profile) throw new Error('Profile not found')
 
-    const accessToken = await exchangeRequestToken(apiKey, apiSecret, requestToken)
+    const creds = await getKiteAppCreds(profile.id, isAdminClaims(sessionClaims))
+    if (!creds) throw new Error('No Kite app credentials for user')
+
+    const accessToken = await exchangeRequestToken(creds.apiKey, creds.apiSecret, requestToken)
 
     await supabase
       .from('kite_credentials')

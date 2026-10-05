@@ -1,5 +1,7 @@
 // Zerodha Kite Connect v3 — server-side only
 import crypto from 'crypto'
+import { supabaseAdmin } from './supabase'
+import { decrypt } from './encryption'
 
 const KITE_BASE = 'https://api.kite.trade'
 
@@ -98,4 +100,33 @@ export function isTokenValid(tokenDate: string): boolean {
   expiry.setUTCDate(expiry.getUTCDate() + 1)
   expiry.setUTCHours(0, 30, 0, 0)
   return now < expiry
+}
+
+// Resolve which Kite Connect app (api_key + secret) to use for a user.
+// A Kite Connect app only accepts logins from the Zerodha account that owns it,
+// so each user registers their own app and stores its key/secret with us.
+// The admin falls back to the platform app in env vars (KITE_API_KEY/SECRET).
+export async function getKiteAppCreds(
+  profileId: string,
+  isAdmin: boolean,
+): Promise<{ apiKey: string; apiSecret: string } | null> {
+  const { data } = await supabaseAdmin
+    .from('kite_credentials')
+    .select('api_key_enc, api_secret_enc')
+    .eq('user_id', profileId)
+    .maybeSingle()
+
+  if (data?.api_key_enc && data?.api_secret_enc) {
+    return { apiKey: decrypt(data.api_key_enc), apiSecret: decrypt(data.api_secret_enc) }
+  }
+
+  if (isAdmin && process.env.KITE_API_KEY && process.env.KITE_API_SECRET) {
+    return { apiKey: process.env.KITE_API_KEY, apiSecret: process.env.KITE_API_SECRET }
+  }
+
+  return null
+}
+
+export function isAdminClaims(sessionClaims: unknown): boolean {
+  return ((sessionClaims as Record<string, unknown> | null)?.metadata as Record<string, unknown> | undefined)?.role === 'admin'
 }

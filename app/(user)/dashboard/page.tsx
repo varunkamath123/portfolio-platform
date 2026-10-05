@@ -156,7 +156,7 @@ export default function DashboardPage() {
               onClick={async () => {
                 const r = await fetch('/api/kite/auth/url')
                 const d = await r.json()
-                if (d.url) window.location.href = d.url
+                window.location.href = d.url ?? '/onboarding'
               }}>
               Refresh Kite token →
             </button>
