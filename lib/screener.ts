@@ -100,11 +100,31 @@ export async function fetchScreenerData(symbol: string): Promise<ScreenerData> {
     if (cg5y) base.pat_cagr_5y = parseNumber(cg5y[1])
     if (cg3y) base.pat_cagr_3y = parseNumber(cg3y[1])
 
-    // Sector — look for sector/industry links in company page
-    const sectorMatch = html.match(/sector[^>]*>[^<]*<a[^>]*>([^<]+)<\/a>/i)
-      ?? html.match(/class="[^"]*sector[^"]*"[^>]*>([^<]{3,40})<\/[^>]+>/i)
-      ?? html.match(/Industry[^<]*<[^>]+>[^<]*<a[^>]+>([^<]{3,40})<\/a>/i)
-    if (sectorMatch) base.sector = sectorMatch[1].trim()
+    // Sector — Screener puts it in a "Company Background" / peers section
+    // Try the structured "industry" breadcrumb first, then fall back
+    const decodeHtml = (s: string) =>
+      s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#39;/g, "'").replace(/&quot;/g, '"')
+
+    // Screener.in: sector link inside "company-links" or "sub-links" section
+    const sectorPatterns = [
+      // <a href="/screens/popular/...">Banking</a> inside company links block
+      /company-links[\s\S]{0,500}?<a\s[^>]*href="\/screens\/[^"]*"[^>]*>([A-Za-z &amp;]+)<\/a>/i,
+      // <span class="sub">Sector</span> followed by link
+      /<span[^>]*>Sector<\/span>[^<]*<a[^>]*>([A-Za-z &amp;]{3,40})<\/a>/i,
+      // Last resort: any link in company header area
+      /peers-table-info[\s\S]{0,300}?<a[^>]*>([A-Za-z &amp;]{3,35})<\/a>/i,
+    ]
+    for (const pat of sectorPatterns) {
+      const m = html.match(pat)
+      if (m) {
+        const candidate = decodeHtml(m[1].trim())
+        // Reject if it looks like an index name or is too long
+        if (candidate.length <= 35 && !/nifty|sensex|bse|index|\d/i.test(candidate)) {
+          base.sector = candidate
+          break
+        }
+      }
+    }
 
     base.market_cap_category = getMarketCapCategory(base.market_cap_cr)
 

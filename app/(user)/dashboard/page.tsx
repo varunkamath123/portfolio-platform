@@ -87,10 +87,14 @@ export default function DashboardPage() {
         setHoldings(d.holdings ?? [])
         setSummary(d.summary)
         setLoading(false)
-        // Kick off health analysis after portfolio loads
+        // Kick off health analysis — POST the already-fetched holdings to avoid re-fetching
         if ((d.holdings ?? []).length > 0) {
           setHealthLoading(true)
-          fetch('/api/portfolio/health')
+          fetch('/api/portfolio/health', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ holdings: d.holdings }),
+          })
             .then(r => r.json())
             .then(h => { setHealth(h); setHealthLoading(false) })
             .catch(() => setHealthLoading(false))
