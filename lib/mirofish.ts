@@ -1,8 +1,22 @@
-// MiroFish 6-agent analysis via Claude API
+// Multi-perspective investment analysis via Claude API
 import Anthropic from '@anthropic-ai/sdk'
 import { fetchScreenerData, fetchLivePrice, type ScreenerData } from './screener'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+const FINANCE_SYSTEM_PROMPT = `You are a professional investment research assistant specializing in Indian equities and portfolio management. You only answer questions about:
+- Indian stocks, NSE/BSE listed companies
+- Portfolio management, asset allocation, diversification
+- Investment strategies (value, growth, GARP, momentum)
+- Market indices (NIFTY, SENSEX, BANKNIFTY, etc.)
+- Financial metrics (PE, ROE, ROCE, EPS, debt ratios, CAGR)
+- Macroeconomic context as it relates to Indian markets
+- Mutual funds and ETFs focused on India
+- Options and futures on Indian instruments
+
+If asked anything outside finance, investing, or portfolio management, politely decline with: "I'm focused on finance and portfolio research. Please ask me about stocks, investments, or portfolio analysis."
+
+Always be direct, data-driven, and specific. Use actual numbers when available.`
 
 export type AgentScore = { agent: string; score: number; reasoning: string }
 
@@ -23,11 +37,16 @@ export type MiroFishResult = {
   analysis_md: string
 }
 
-// Extract NSE ticker symbols from a free-text question
+export type ConversationMessage = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export async function extractTickers(question: string): Promise<string[]> {
   const msg = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 200,
+    system: FINANCE_SYSTEM_PROMPT,
     messages: [{
       role: 'user',
       content: `Extract all Indian stock NSE ticker symbols from this question. Return ONLY a JSON array of uppercase NSE symbols (e.g. ["MUTHOOTFIN","HDFCBANK"]). If none found return []. Question: "${question}"`,
@@ -56,6 +75,8 @@ export async function runMiroFish(symbol: string): Promise<MiroFishResult> {
   const dataContext = `
 Stock: ${symbol}
 CMP: ₹${cmp}
+Sector: ${screener.sector ?? 'N/A'}
+Market Cap: ₹${screener.market_cap_cr ?? 'N/A'} Cr (${screener.market_cap_category})
 PE (TTM): ${screener.pe ?? 'N/A'}
 ROE: ${screener.roe ?? 'N/A'}%
 ROCE: ${screener.roce ?? 'N/A'}%
@@ -63,15 +84,14 @@ ROCE: ${screener.roce ?? 'N/A'}%
 3Y PAT CAGR: ${screener.pat_cagr_3y ?? 'N/A'}%
 PEG (5Y): ${peg5y ?? 'N/A'}
 Book Value: ₹${screener.book_value ?? 'N/A'}
-Market Cap: ₹${screener.market_cap_cr ?? 'N/A'} Cr
 Dividend Yield: ${screener.dividend_yield ?? 'N/A'}%
 52W High: ₹${screener.high_52w ?? 'N/A'}
 52W Low: ₹${screener.low_52w ?? 'N/A'}
 From 52W High: ${screener.high_52w ? ((cmp / screener.high_52w - 1) * 100).toFixed(1) : 'N/A'}%
-${screener.error ? `Data fetch note: ${screener.error}` : ''}
+${screener.error ? `Data note: ${screener.error}` : ''}
 `.trim()
 
-  const prompt = `You are a MiroFish 6-agent investment analysis system. Analyze ${symbol} using the data below and respond with a JSON object ONLY (no markdown fences).
+  const prompt = `Analyze ${symbol} using the data below and respond with a JSON object ONLY (no markdown fences).
 
 Data:
 ${dataContext}
@@ -86,56 +106,48 @@ Return this exact JSON structure:
     {"agent": "MACRO", "score": 0-10, "reasoning": "one sentence"},
     {"agent": "DEVIL", "score": 0-10, "reasoning": "one sentence"}
   ],
-  "composite": number (average of 6 scores, 1 decimal),
+  "composite": number,
   "verdict": "BUY / HOLD / SELL / WATCH — one line reason",
   "bull_case": ["point 1", "point 2", "point 3"],
   "bear_case": ["point 1", "point 2", "point 3"],
-  "entry": suggested entry price or null,
-  "stop": stop loss price or null,
-  "target1": first target price or null,
-  "rr": risk reward ratio or null,
-  "analysis_md": "3-4 paragraph markdown analysis covering valuation, quality, momentum, and key risk. Be direct and specific."
+  "entry": price or null,
+  "stop": price or null,
+  "target1": price or null,
+  "rr": ratio or null,
+  "analysis_md": "3-4 paragraph markdown analysis on valuation, quality, momentum, and key risk."
 }
 
-Agent scoring criteria:
+Scoring:
 - GRAHAM: margin of safety, PE vs intrinsic value, debt, asset backing
 - BUFFETT: moat quality, ROE consistency, brand, pricing power
-- PABRAI: asymmetric upside, beaten-down quality business, downside protection
-- GARP: PEG ratio quality, growth vs price paid, earnings delivery
+- PABRAI: asymmetric upside, beaten-down quality, downside protection
+- GARP: PEG quality, growth vs price, earnings delivery
 - MACRO: sector tailwinds, rate cycle, policy environment
-- DEVIL: risks the bulls ignore, what could go wrong, regulatory/competition`
+- DEVIL: risks the bulls ignore, what could go wrong`
 
   const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 2000,
+    system: FINANCE_SYSTEM_PROMPT,
     messages: [{ role: 'user', content: prompt }],
   })
 
   const text = (msg.content[0] as { type: string; text: string }).text
   const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error('MiroFish: no JSON in response')
+  if (!jsonMatch) throw new Error('Analysis: no JSON in response')
 
   const parsed = JSON.parse(jsonMatch[0])
 
   return {
-    symbol,
-    screener,
-    live_price: livePrice,
-    peg_5y: peg5y,
-    agents: parsed.agents,
-    composite: parsed.composite,
-    verdict: parsed.verdict,
-    bull_case: parsed.bull_case,
-    bear_case: parsed.bear_case,
-    entry: parsed.entry,
-    stop: parsed.stop,
-    target1: parsed.target1,
-    rr: parsed.rr,
-    analysis_md: parsed.analysis_md,
+    symbol, screener, live_price: livePrice, peg_5y: peg5y,
+    agents: parsed.agents, composite: parsed.composite,
+    verdict: parsed.verdict, bull_case: parsed.bull_case,
+    bear_case: parsed.bear_case, entry: parsed.entry,
+    stop: parsed.stop, target1: parsed.target1,
+    rr: parsed.rr, analysis_md: parsed.analysis_md,
   }
 }
 
-// Answer a free-form stock question with context from Screener + MiroFish
 export async function answerStockQuestion(
   question: string,
   tickers: string[],
@@ -143,9 +155,9 @@ export async function answerStockQuestion(
   const mirofish = await Promise.all(tickers.slice(0, 3).map(t => runMiroFish(t)))
 
   const context = mirofish.map(r => `
-### ${r.symbol}
+### ${r.symbol} (${r.screener.sector ?? 'Unknown'} | ${r.screener.market_cap_category})
 CMP ₹${r.live_price ?? r.screener.cmp} | PE ${r.screener.pe}x | ROE ${r.screener.roe}% | ROCE ${r.screener.roce}% | 5Y CAGR ${r.screener.pat_cagr_5y}% | PEG ${r.peg_5y}
-MiroFish Composite: ${r.composite}/10 | Verdict: ${r.verdict}
+Composite: ${r.composite}/10 | Verdict: ${r.verdict}
 Bull: ${r.bull_case.join('; ')}
 Bear: ${r.bear_case.join('; ')}
 `).join('\n')
@@ -153,20 +165,116 @@ Bear: ${r.bear_case.join('; ')}
   const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1500,
+    system: FINANCE_SYSTEM_PROMPT,
     messages: [{
       role: 'user',
-      content: `Answer this investment question using the MiroFish analysis data provided. Be direct, specific, and use actual numbers. Format in clean markdown with headers.
+      content: `Answer this investment question using the analysis data provided. Be direct, specific, use actual numbers. Format in clean markdown with headers.
 
 Question: ${question}
 
-MiroFish Analysis Data:
+Analysis Data:
 ${context}
 
-Give a comprehensive answer that directly addresses what was asked. Include specific numbers, PE ratios, PEG ratios, and price targets where relevant. End with a clear actionable recommendation.`,
+Give a comprehensive answer directly addressing the question. Include specific numbers, ratios, and price targets where relevant. End with a clear actionable recommendation.`,
     }],
   })
 
   const answer_md = (msg.content[0] as { type: string; text: string }).text
-
   return { answer_md, mirofish }
+}
+
+// Continue a conversation with follow-up messages — used for conversation threading
+export async function continueConversation(
+  originalQuestion: string,
+  history: ConversationMessage[],
+  newMessage: string,
+  contextData?: string,
+): Promise<string> {
+  const messages: Anthropic.MessageParam[] = []
+
+  // Add original context as first user message if not already in history
+  if (history.length === 0) {
+    messages.push({
+      role: 'user',
+      content: `Research question: ${originalQuestion}${contextData ? `\n\nAnalysis context:\n${contextData}` : ''}`,
+    })
+  } else {
+    // Reconstruct history
+    for (const m of history) {
+      messages.push({ role: m.role, content: m.content })
+    }
+  }
+
+  messages.push({ role: 'user', content: newMessage })
+
+  const msg = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1200,
+    system: FINANCE_SYSTEM_PROMPT,
+    messages,
+  })
+
+  return (msg.content[0] as { type: string; text: string }).text
+}
+
+// Generate portfolio health assessment for the dashboard
+export async function generatePortfolioHealth(holdings: {
+  symbol: string
+  sector: string | null
+  market_cap_category: string
+  pnl_pct: number
+  current_value: number
+  pat_cagr_5y: number | null
+  pe: number | null
+  roe: number | null
+}[]): Promise<{
+  health_score: number
+  summary: string
+  sector_concentration: { sector: string; allocation_pct: number }[]
+  growth_outlook: string
+  risks: string[]
+  opportunities: string[]
+}> {
+  const totalValue = holdings.reduce((s, h) => s + h.current_value, 0)
+
+  const holdingsSummary = holdings.map(h => ({
+    symbol: h.symbol,
+    sector: h.sector ?? 'Unknown',
+    cap: h.market_cap_category,
+    allocation_pct: totalValue > 0 ? ((h.current_value / totalValue) * 100).toFixed(1) : '0',
+    pnl_pct: h.pnl_pct.toFixed(1),
+    pat_cagr_5y: h.pat_cagr_5y ?? 'N/A',
+    pe: h.pe ?? 'N/A',
+    roe: h.roe ?? 'N/A',
+  }))
+
+  const prompt = `Analyze this portfolio and return a JSON health assessment. No markdown fences.
+
+Holdings:
+${JSON.stringify(holdingsSummary, null, 2)}
+
+Total portfolio value: ₹${totalValue.toFixed(0)}
+
+Return ONLY this JSON:
+{
+  "health_score": 0-100 integer,
+  "summary": "2-3 sentence portfolio health summary mentioning concentration, quality, and outlook",
+  "sector_concentration": [{"sector": "name", "allocation_pct": number}],
+  "growth_outlook": "2-3 sentence Q2-Q4 2026 earnings and price outlook based on sector trends and individual stock CAGR data",
+  "risks": ["risk 1", "risk 2", "risk 3"],
+  "opportunities": ["opportunity 1", "opportunity 2"]
+}`
+
+  const msg = await client.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 800,
+    system: FINANCE_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: prompt }],
+  })
+
+  const text = (msg.content[0] as { type: string; text: string }).text
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) throw new Error('Health: no JSON in response')
+
+  return JSON.parse(match[0])
 }

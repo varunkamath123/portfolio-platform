@@ -144,7 +144,7 @@ export default function QuestionPage({ params }: { params: Promise<{ id: string 
   if (!data) return (
     <div className="text-center mt-20" style={{ color: 'var(--muted)' }}>
       Question not found.{' '}
-      <Link href="/feed" style={{ color: 'var(--green)' }} className="underline">Back to feed</Link>
+      <Link href="/ask" style={{ color: 'var(--green)' }} className="underline">Back to research</Link>
     </div>
   )
 
@@ -186,8 +186,8 @@ export default function QuestionPage({ params }: { params: Promise<{ id: string 
         </div>
       )}
 
-      <Link href="/feed" className="block text-sm" style={{ color: 'var(--muted)' }}>
-        ← Back to feed
+      <Link href="/ask" className="block text-sm" style={{ color: 'var(--muted)' }}>
+        ← Back to research
       </Link>
     </div>
   )

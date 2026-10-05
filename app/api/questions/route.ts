@@ -3,12 +3,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { extractTickers, answerStockQuestion } from '@/lib/mirofish'
 
-// GET /api/questions -- current user's own research history
 export async function GET(req: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const limit = parseInt(req.nextUrl.searchParams.get('limit') ?? '20')
+  const limit = parseInt(req.nextUrl.searchParams.get('limit') ?? '50')
   const offset = parseInt(req.nextUrl.searchParams.get('offset') ?? '0')
 
   const { data: profile } = await supabase
@@ -21,12 +20,8 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('questions')
-    .select(`
-      id, question, tickers, status, created_at,
-      answers ( id, answer_md, mirofish_data, created_at )
-    `)
+    .select('id, question, tickers, status, created_at')
     .eq('user_id', profile.id)
-    .eq('status', 'answered')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1)
 
@@ -34,7 +29,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ questions: data })
 }
 
-// POST /api/questions -- submit a new research question
 export async function POST(req: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -73,6 +67,12 @@ export async function POST(req: NextRequest) {
       answer_md,
       mirofish_data: mirofish,
     })
+
+    // Save messages for conversation threading
+    await supabase.from('messages').insert([
+      { question_id: qRow.id, role: 'user', content: question },
+      { question_id: qRow.id, role: 'assistant', content: answer_md, metadata: { mirofish } },
+    ])
 
     await supabase
       .from('questions')

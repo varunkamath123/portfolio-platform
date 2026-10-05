@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase'
 import { decrypt } from '@/lib/encryption'
 import { getKiteHoldings, isTokenValid } from '@/lib/kite'
+import { fetchScreenerData } from '@/lib/screener'
 
 export async function GET() {
   const { userId } = await auth()
@@ -36,18 +37,38 @@ export async function GET() {
   const accessToken = decrypt(creds.access_token_enc)
   const holdings = await getKiteHoldings(apiKey, accessToken)
 
-  const enriched = holdings.map(h => ({
-    symbol:         h.tradingsymbol,
-    exchange:       h.exchange,
-    quantity:       h.quantity,
-    avg_price:      h.average_price,
-    ltp:            h.last_price,
-    current_value:  h.quantity * h.last_price,
-    invested_value: h.quantity * h.average_price,
-    pnl:            h.pnl,
-    pnl_pct:        h.average_price > 0 ? ((h.last_price / h.average_price - 1) * 100) : 0,
-    day_change_pct: h.day_change_percentage,
-  }))
+  // Enrich with sector + market cap category from Screener (parallel, timeout-guarded)
+  const screenerResults = await Promise.allSettled(
+    holdings.slice(0, 20).map(h =>
+      Promise.race([
+        fetchScreenerData(h.tradingsymbol),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+      ]).catch(() => null)
+    )
+  )
+
+  const enriched = holdings.map((h, i) => {
+    const sr = screenerResults[i]?.status === 'fulfilled' ? screenerResults[i].value : null
+
+    return {
+      symbol:               h.tradingsymbol,
+      exchange:             h.exchange,
+      quantity:             h.quantity,
+      avg_price:            h.average_price,
+      ltp:                  h.last_price,
+      current_value:        h.quantity * h.last_price,
+      invested_value:       h.quantity * h.average_price,
+      pnl:                  h.pnl,
+      pnl_pct:              h.average_price > 0 ? ((h.last_price / h.average_price - 1) * 100) : 0,
+      day_change_pct:       h.day_change_percentage,
+      sector:               sr?.sector ?? null,
+      market_cap_category:  sr?.market_cap_category ?? 'Unknown',
+      market_cap_cr:        sr?.market_cap_cr ?? null,
+      pe:                   sr?.pe ?? null,
+      roe:                  sr?.roe ?? null,
+      pat_cagr_5y:          sr?.pat_cagr_5y ?? null,
+    }
+  })
 
   const total_invested = enriched.reduce((s, h) => s + h.invested_value, 0)
   const total_current  = enriched.reduce((s, h) => s + h.current_value, 0)
