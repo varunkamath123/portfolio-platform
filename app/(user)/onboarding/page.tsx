@@ -1,109 +1,85 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 export default function OnboardingPage() {
-  const router = useRouter()
-  const [form, setForm]     = useState({ client_id: '', api_key: '', secret_key: '' })
+  const params = useSearchParams()
+  const errorParam = params.get('error')
   const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
+  const [err, setErr] = useState(errorParam ?? '')
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
+  async function connect() {
     setLoading(true)
-    setError('')
-
-    const res = await fetch('/api/users/credentials', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    })
-
-    if (!res.ok) {
-      const d = await res.json()
-      setError(d.error ?? 'Failed to save credentials')
+    setErr('')
+    try {
+      const r = await fetch('/api/kite/auth/url')
+      const d = await r.json()
+      if (d.url) {
+        window.location.href = d.url
+      } else {
+        setErr(d.error ?? 'Could not build login URL')
+        setLoading(false)
+      }
+    } catch {
+      setErr('Network error — please try again')
       setLoading(false)
-      return
-    }
-
-    // After saving credentials, redirect to Fyers OAuth
-    const authRes  = await fetch('/api/fyers/auth/url')
-    const authData = await authRes.json()
-    if (authData.url) {
-      window.location.href = authData.url
-    } else {
-      router.push('/dashboard')
     }
   }
 
+  const errorMsg =
+    err === 'kite_auth_failed'     ? 'Kite login was cancelled. Try again.' :
+    err === 'token_exchange_failed' ? 'Token exchange failed. Try again in a few seconds.' :
+    err
+
   return (
-    <div className="max-w-md mx-auto mt-12">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-1">Connect your Fyers account</h1>
-      <p className="text-sm text-gray-500 mb-8">
-        Your API credentials are AES-256 encrypted before storage and never exposed to the browser.
-      </p>
-
-      <form onSubmit={submit} className="space-y-4">
-        <Field
-          label="Client ID"
-          placeholder="e.g. XY12345"
-          value={form.client_id}
-          onChange={v => setForm(f => ({ ...f, client_id: v }))}
-        />
-        <Field
-          label="App ID (API Key)"
-          placeholder="Your Fyers App ID"
-          value={form.api_key}
-          onChange={v => setForm(f => ({ ...f, api_key: v }))}
-        />
-        <Field
-          label="Secret Key"
-          placeholder="Your Fyers App Secret"
-          value={form.secret_key}
-          onChange={v => setForm(f => ({ ...f, secret_key: v }))}
-          type="password"
-        />
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2.5 px-4 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-60 transition-colors"
-        >
-          {loading ? 'Saving & redirecting to Fyers…' : 'Save & Connect'}
-        </button>
-      </form>
-
-      <div className="mt-6 rounded-lg bg-blue-50 border border-blue-100 p-4 text-xs text-blue-700 space-y-1">
-        <p className="font-medium">How to get your Fyers API credentials:</p>
-        <ol className="list-decimal list-inside space-y-1">
-          <li>Log in to myapi.fyers.in</li>
-          <li>Create a new app — set redirect URI to: <code className="bg-blue-100 px-1 rounded">{process.env.NEXT_PUBLIC_APP_URL}/api/fyers/auth/callback</code></li>
-          <li>Copy the App ID and Secret Key from the app dashboard</li>
-        </ol>
+    <div className="max-w-md mx-auto mt-16 px-4">
+      {/* Logo mark */}
+      <div className="text-center mb-10">
+        <p className="text-4xl font-bold mb-2" style={{ color: 'var(--green)' }}>◈</p>
+        <h1 className="text-2xl font-bold text-white">Connect Zerodha</h1>
+        <p className="text-sm mt-2" style={{ color: 'var(--muted)' }}>
+          Link your Kite account to track your portfolio and get MiroFish answers.
+        </p>
       </div>
-    </div>
-  )
-}
 
-function Field({
-  label, placeholder, value, onChange, type = 'text',
-}: {
-  label: string; placeholder: string; value: string
-  onChange: (v: string) => void; type?: string
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
-      <input
-        type={type}
-        placeholder={placeholder}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        required
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      />
+      {/* Steps */}
+      <div className="rounded-xl p-6 mb-6 space-y-5" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+        {[
+          { n: 1, title: 'Click Connect below', body: 'You\'ll be redirected to Zerodha\'s login page.' },
+          { n: 2, title: 'Log in with your Zerodha credentials', body: 'Enter your user ID, password, and 2FA PIN on Zerodha\'s own page — your credentials never touch this app.' },
+          { n: 3, title: 'Back to your portfolio', body: 'After authorising, you land straight on your dashboard. Tokens refresh daily — you\'ll see a one-click Refresh button each morning after 6 AM.' },
+        ].map(s => (
+          <div key={s.n} className="flex gap-4">
+            <div className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-black"
+              style={{ background: 'var(--green)' }}>
+              {s.n}
+            </div>
+            <div>
+              <p className="font-medium text-white text-sm">{s.title}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{s.body}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {errorMsg && (
+        <div className="mb-4 rounded-lg px-4 py-3 text-sm text-red-400" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}>
+          {errorMsg}
+        </div>
+      )}
+
+      <button
+        onClick={connect}
+        disabled={loading}
+        className="w-full font-semibold py-3 rounded-xl text-sm transition-opacity disabled:opacity-50"
+        style={{ background: 'var(--green)', color: '#000' }}
+      >
+        {loading ? 'Redirecting to Zerodha…' : 'Connect with Zerodha →'}
+      </button>
+
+      <p className="text-center text-xs mt-4" style={{ color: 'var(--muted)' }}>
+        Your Zerodha credentials are entered on Zerodha's own site — never here.
+      </p>
     </div>
   )
 }

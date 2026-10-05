@@ -9,13 +9,12 @@ export default async function UserLayout({ children }: { children: React.ReactNo
 
   const isAdmin = (sessionClaims?.metadata as Record<string, unknown>)?.role === 'admin'
 
-  // Ensure user profile exists (webhook may have lagged)
   await supabaseAdmin
     .from('user_profiles')
     .upsert({ clerk_user_id: userId }, { onConflict: 'clerk_user_id', ignoreDuplicates: true })
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg)' }}>
       <Nav isAdmin={isAdmin} />
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">{children}</main>
     </div>

@@ -5,21 +5,24 @@ import { UserButton } from '@clerk/nextjs'
 import { cn } from '@/lib/utils'
 
 const userLinks = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/trades',    label: 'Trades' },
+  { href: '/dashboard', label: 'Portfolio' },
+  { href: '/ask',       label: 'Ask' },
+  { href: '/feed',      label: 'Feed' },
 ]
 
 const adminLinks = [
-  { href: '/admin',     label: 'Users' },
+  { href: '/admin', label: 'Users' },
 ]
 
 export function Nav({ isAdmin = false }: { isAdmin?: boolean }) {
   const path = usePathname()
 
   return (
-    <nav className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4">
+    <nav style={{ background: '#0a100a', borderBottom: '1px solid var(--border)' }} className="sticky top-0 z-10 px-4">
       <div className="max-w-6xl mx-auto flex items-center h-14 gap-6">
-        <span className="font-semibold text-gray-900 text-sm tracking-tight">FnO Dashboard</span>
+        <Link href="/dashboard" className="font-bold text-sm tracking-tight" style={{ color: 'var(--green)' }}>
+          ◈ MiroFish
+        </Link>
 
         <div className="flex items-center gap-1 flex-1">
           {userLinks.map(l => (
@@ -28,10 +31,18 @@ export function Nav({ isAdmin = false }: { isAdmin?: boolean }) {
               href={l.href}
               className={cn(
                 'px-3 py-1.5 rounded text-sm font-medium transition-colors',
-                path === l.href
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-500 hover:text-gray-900'
+                path === l.href || (l.href === '/dashboard' && path === '/')
+                  ? 'font-semibold'
+                  : ''
               )}
+              style={{
+                color: (path === l.href || (l.href === '/dashboard' && path === '/'))
+                  ? 'var(--green)'
+                  : 'var(--muted)',
+                background: (path === l.href || (l.href === '/dashboard' && path === '/'))
+                  ? 'rgba(22,199,132,0.08)'
+                  : 'transparent',
+              }}
             >
               {l.label}
             </Link>
@@ -40,12 +51,8 @@ export function Nav({ isAdmin = false }: { isAdmin?: boolean }) {
             <Link
               key={l.href}
               href={l.href}
-              className={cn(
-                'px-3 py-1.5 rounded text-sm font-medium transition-colors',
-                path.startsWith('/admin')
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-500 hover:text-gray-900'
-              )}
+              className="px-3 py-1.5 rounded text-sm font-medium transition-colors"
+              style={{ color: path.startsWith('/admin') ? 'var(--green)' : 'var(--muted)' }}
             >
               {l.label}
             </Link>
