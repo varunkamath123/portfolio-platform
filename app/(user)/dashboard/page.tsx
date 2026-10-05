@@ -34,6 +34,7 @@ export default function DashboardPage() {
     fetch('/api/kite/portfolio')
       .then(r => r.json())
       .then(d => {
+        if (d.needs_connect) { window.location.href = '/onboarding'; return }
         if (d.error) { setError(d); setLoading(false); return }
         setHoldings(d.holdings ?? [])
         setSummary(d.summary)
