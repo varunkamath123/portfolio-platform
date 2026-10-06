@@ -1,6 +1,7 @@
 'use client'
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Markdown } from '@/components/Markdown'
 
 type AgentScore = { agent: string; score: number; reasoning: string }
 type MiroFish = {
@@ -182,7 +183,7 @@ export default function QuestionPage({ params }: { params: Promise<{ id: string 
       {/* Full answer */}
       {answer?.answer_md && (
         <div className="rounded-xl p-6" style={cardStyle}>
-          <div dangerouslySetInnerHTML={{ __html: markdownToHtml(answer.answer_md) }} />
+          <Markdown>{answer.answer_md}</Markdown>
         </div>
       )}
 
@@ -193,16 +194,3 @@ export default function QuestionPage({ params }: { params: Promise<{ id: string 
   )
 }
 
-function markdownToHtml(md: string): string {
-  return md
-    .replace(/^### (.+)$/gm, '<h3 style="color:white;font-weight:600;margin-top:1rem;margin-bottom:0.25rem">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 style="color:white;font-weight:700;margin-top:1.25rem;margin-bottom:0.5rem;font-size:1rem">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 style="color:white;font-weight:700;margin-top:1.5rem;margin-bottom:0.5rem">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:white">$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="background:#1a2a1a;border-radius:3px;padding:0 4px;color:var(--green);font-size:0.75rem">$1</code>')
-    .replace(/^- (.+)$/gm, '<li style="margin-left:1rem;color:#a0b8a0">$1</li>')
-    .replace(/\n\n/g, '</p><p style="color:#a0b8a0;font-size:0.875rem;margin-bottom:0.75rem">')
-    .replace(/^/, '<p style="color:#a0b8a0;font-size:0.875rem;margin-bottom:0.75rem">')
-    .replace(/$/, '</p>')
-}

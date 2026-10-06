@@ -18,6 +18,28 @@ If asked anything outside finance, investing, or portfolio management, politely 
 
 Always be direct, data-driven, and specific. Use actual numbers when available.`
 
+// Shape of every prose answer shown in the Research UI (first answer + follow-ups)
+const ANSWER_STYLE = `
+FORMAT — the reader is an individual investor, often on a phone. Keep it scannable:
+- Open with a one-line blockquote: "> **Bottom line:** <direct answer in 1-2 sentences>".
+- Then 2-4 short sections with "## " headings. No "# " title (the question is already shown). No emojis.
+- Bullets over paragraphs; max ~5 bullets per section, one line each where possible. Bold only the key number or verdict in a bullet.
+- Use a table only when comparing 2+ stocks or options across metrics (max 6 rows).
+- End with "## What to do" — 2-4 numbered, concrete actions tied to the user's holdings where relevant.
+- Aim for 250-400 words. Never pad.
+
+DATA DISCIPLINE:
+- Today is {TODAY}. Frame timelines from today — never refer to past years as upcoming.
+- Only quote prices/ratios present in the data provided. If data for a stock is missing, say "Live data for <SYMBOL> is unavailable right now" in one line instead of estimating from memory or describing internal data feeds.
+- Use the pre-computed Value/Weight figures from the portfolio as-is. When proposing target weights they must sum to 100%; rupee amounts = weight change × total value; share counts = rupee amount ÷ LTP. Check these sums before answering.
+- For banks and NBFCs, ROCE is not meaningful (deposits/borrowings are raw material) — judge them on ROE, asset quality and growth instead.
+- Don't restate the user's whole portfolio; reference only the holdings that matter to the question.`
+
+function researchSystemPrompt() {
+  const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
+  return `${FINANCE_SYSTEM_PROMPT}\n${ANSWER_STYLE.replace('{TODAY}', today)}`
+}
+
 export type AgentScore = { agent: string; score: number; reasoning: string }
 
 export type MiroFishResult = {
@@ -42,6 +64,19 @@ export type ConversationMessage = {
   content: string
 }
 
+// Old NSE symbols the model still emits from training data → current symbol
+const RENAMED_SYMBOLS: Record<string, string> = {
+  ZOMATO: 'ETERNAL',
+  HDFC: 'HDFCBANK',
+  LTI: 'LTIM',
+  MINDTREE: 'LTIM',
+  ADANITRANS: 'ADANIENSOL',
+  MOTHERSUMI: 'MOTHERSON',
+  KEIIND: 'KEI',
+  KEIINDUSTRIES: 'KEI',
+  KEIINDUS: 'KEI',
+}
+
 export async function extractTickers(question: string): Promise<string[]> {
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
@@ -49,13 +84,14 @@ export async function extractTickers(question: string): Promise<string[]> {
     system: FINANCE_SYSTEM_PROMPT,
     messages: [{
       role: 'user',
-      content: `Extract all Indian stock NSE ticker symbols from this question. Return ONLY a JSON array of uppercase NSE symbols (e.g. ["MUTHOOTFIN","HDFCBANK"]). If none found return []. Question: "${question}"`,
+      content: `Extract all Indian stock NSE ticker symbols from this question. Return ONLY a JSON array of uppercase NSE symbols (e.g. ["MUTHOOTFIN","HDFCBANK"]). Use the CURRENT NSE symbol for renamed companies (e.g. Zomato → ETERNAL). If none found return []. Question: "${question}"`,
     }],
   })
   try {
     const text = (msg.content[0] as { type: string; text: string }).text
     const match = text.match(/\[[\s\S]*\]/)
-    return match ? JSON.parse(match[0]) : []
+    const tickers: string[] = match ? JSON.parse(match[0]) : []
+    return [...new Set(tickers.map(t => RENAMED_SYMBOLS[t] ?? t))]
   } catch {
     return []
   }
@@ -88,7 +124,7 @@ Dividend Yield: ${screener.dividend_yield ?? 'N/A'}%
 52W High: ₹${screener.high_52w ?? 'N/A'}
 52W Low: ₹${screener.low_52w ?? 'N/A'}
 From 52W High: ${screener.high_52w ? ((cmp / screener.high_52w - 1) * 100).toFixed(1) : 'N/A'}%
-${screener.error ? `Data note: ${screener.error}` : ''}
+${screener.error ? `Data note: live data for ${symbol} is unavailable (the symbol may be wrong) — do not quote numbers for it` : ''}
 `.trim()
 
   const prompt = `Analyze ${symbol} using the data below. Respond with a JSON object ONLY (no markdown fences).
@@ -159,17 +195,15 @@ Bear: ${r.bear_case.join('; ')}
 
   const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1500,
-    system: FINANCE_SYSTEM_PROMPT,
+    max_tokens: 1000,
+    system: researchSystemPrompt(),
     messages: [{
       role: 'user',
-      content: `Answer this investment question using the data provided. Be direct, specific, use actual numbers. Format in clean markdown with headers.
+      content: `Answer this investment question using the data provided.
 
 Question: ${question}
 ${portfolioContext ? `\nUser's Portfolio:\n${portfolioContext}\n` : ''}
-${stockContext ? `\nStock Analysis Data:\n${stockContext}` : ''}
-
-Give a comprehensive answer directly addressing the question. Reference specific holdings and their performance where relevant. End with a clear actionable recommendation.`,
+${stockContext ? `\nStock Analysis Data:\n${stockContext}` : ''}`,
     }],
   })
 
@@ -200,7 +234,8 @@ export async function continueConversation(
     const [first, ...rest] = history
     messages.push({
       role: first.role,
-      content: first.content + (portfolioBlock && !first.content.includes('current portfolio') ? portfolioBlock : ''),
+      // Match our own block header, not the phrase — users often ask about "my current portfolio"
+      content: first.content + (portfolioBlock && !first.content.includes("User's current portfolio:\n") ? portfolioBlock : ''),
     })
     for (const m of rest) {
       messages.push({ role: m.role, content: m.content })
@@ -211,8 +246,8 @@ export async function continueConversation(
 
   const msg = await client.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1200,
-    system: FINANCE_SYSTEM_PROMPT,
+    max_tokens: 1000,
+    system: researchSystemPrompt(),
     messages,
   })
 

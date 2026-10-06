@@ -1,6 +1,8 @@
 'use client'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { Markdown } from '@/components/Markdown'
+import { buildPortfolioContext, type ContextHolding } from '@/lib/portfolio-context'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Conversation = {
@@ -33,16 +35,7 @@ type MiroFishResult = {
   peg_5y: number | null
   live_price: number | null
 }
-type Holding = {
-  symbol: string
-  sector: string | null
-  market_cap_category: string
-  quantity: number
-  avg_price: number
-  ltp: number
-  pnl_pct: number
-  current_value: number
-}
+type Holding = ContextHolding
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const AGENT_COLORS: Record<string, string> = {
@@ -59,30 +52,6 @@ function timeAgo(iso: string) {
   return `${Math.floor(s / 86400)}d ago`
 }
 
-function markdownToHtml(md: string): string {
-  return md
-    .replace(/^### (.+)$/gm, '<h3 style="color:white;font-weight:600;margin-top:1rem;margin-bottom:0.25rem;font-size:0.9rem">$1</h3>')
-    .replace(/^## (.+)$/gm,  '<h2 style="color:white;font-weight:700;margin-top:1.25rem;margin-bottom:0.5rem">$1</h2>')
-    .replace(/^# (.+)$/gm,   '<h1 style="color:white;font-weight:700;margin-top:1.5rem;margin-bottom:0.5rem">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong style="color:white">$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/`(.+?)`/g, '<code style="background:#1a2a1a;border-radius:3px;padding:0 4px;color:var(--green);font-size:0.75rem">$1</code>')
-    .replace(/^- (.+)$/gm, '<li style="margin-left:1rem;color:#a0b8a0;margin-bottom:2px">$1</li>')
-    .replace(/\n\n/g, '</p><p style="color:#a0b8a0;font-size:0.875rem;margin-bottom:0.75rem">')
-    .replace(/^/, '<p style="color:#a0b8a0;font-size:0.875rem;margin-bottom:0.75rem">')
-    .replace(/$/, '</p>')
-}
-
-function buildPortfolioContext(holdings: Holding[], summary: { total_invested: number; total_current: number; total_pnl_pct: number } | null): string {
-  if (!holdings.length) return ''
-  const rows = holdings.map(h =>
-    `${h.symbol} | ${h.sector ?? 'Unknown'} | ${h.market_cap_category} | Qty ${h.quantity} | Avg ₹${h.avg_price.toFixed(0)} | LTP ₹${h.ltp.toFixed(0)} | P&L ${h.pnl_pct >= 0 ? '+' : ''}${h.pnl_pct.toFixed(1)}%`
-  ).join('\n')
-  const totals = summary
-    ? `Total value: ₹${(summary.total_current / 1e5).toFixed(2)}L | Invested: ₹${(summary.total_invested / 1e5).toFixed(2)}L | Overall return: ${summary.total_pnl_pct >= 0 ? '+' : ''}${summary.total_pnl_pct.toFixed(2)}%`
-    : ''
-  return `${rows}\n${totals}`
-}
 
 // ─── Analysis card ─────────────────────────────────────────────────────────
 function AnalysisCard({ data }: { data: MiroFishResult }) {
@@ -198,8 +167,9 @@ function MessageBubble({ msg }: { msg: Message }) {
         </div>
       )}
 
-      <div className="text-sm rounded-xl p-4" style={cardStyle}
-        dangerouslySetInnerHTML={{ __html: markdownToHtml(msg.content) }} />
+      <div className="rounded-xl p-4 sm:p-5" style={cardStyle}>
+        <Markdown>{msg.content}</Markdown>
+      </div>
     </div>
   )
 }
