@@ -111,8 +111,21 @@ export default function OnboardingPage() {
           <div>
             <p className="font-medium text-white text-sm">Step 1 — Create your Kite Connect app</p>
             <p className="text-xs mt-1" style={{ color: 'var(--muted)' }}>
-              Zerodha only lets a Kite app read the account that created it, so you need your own (one-time, ~2 minutes).
+              Zerodha only lets a Kite app read the account that created it, so you need your own (one-time, ~5 minutes).
             </p>
+            <div className="flex flex-col sm:flex-row gap-2 mt-3">
+              <a href="https://developers.kite.trade" target="_blank" rel="noopener noreferrer"
+                className="flex-1 text-center text-xs font-semibold py-2.5 rounded-lg"
+                style={{ background: 'var(--green)', color: '#000' }}>
+                Open Kite developer console ↗
+              </a>
+              {/* New tab so anything typed into the form below isn't lost */}
+              <a href="/onboarding/kite-guide" target="_blank" rel="noopener"
+                className="flex-1 text-center text-xs font-semibold py-2.5 rounded-lg"
+                style={{ border: '1px solid var(--green)', color: 'var(--green)' }}>
+                Need help? Step-by-step guide
+              </a>
+            </div>
           </div>
 
           <ol className="text-xs space-y-2 list-decimal pl-4" style={{ color: 'var(--muted)' }}>
