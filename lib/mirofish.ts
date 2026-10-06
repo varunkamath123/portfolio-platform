@@ -268,50 +268,57 @@ export async function generatePortfolioHealth(holdings: {
   health_score: number
   summary: string
   sector_concentration: { sector: string; allocation_pct: number }[]
-  growth_outlook: string
+  growth_outlook: string[]
   risks: string[]
   opportunities: string[]
 }> {
-  const totalValue = holdings.reduce((s, h) => s + h.current_value, 0)
+  const totalValue = holdings.reduce((s, h) => s + h.current_value, 0) || 1
+  const pctOf = (v: number) => Math.round((v / totalValue) * 1000) / 10
 
-  const holdingsSummary = holdings.map(h => ({
-    symbol: h.symbol,
-    sector: h.sector ?? 'Unknown',
-    cap: h.market_cap_category,
-    allocation_pct: totalValue > 0 ? ((h.current_value / totalValue) * 100).toFixed(1) : '0',
-    pnl_pct: h.pnl_pct.toFixed(1),
-    pat_cagr_5y: h.pat_cagr_5y ?? 'N/A',
-    pe: h.pe ?? 'N/A',
-    roe: h.roe ?? 'N/A',
-  }))
+  // Sector weights are plain arithmetic — compute them here rather than asking
+  // the model (it was slower, sometimes wrong, and pushed output past max_tokens)
+  const bySector = new Map<string, number>()
+  for (const h of holdings) bySector.set(h.sector ?? 'Unknown', (bySector.get(h.sector ?? 'Unknown') ?? 0) + h.current_value)
+  const sector_concentration = [...bySector.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([sector, v]) => ({ sector, allocation_pct: pctOf(v) }))
 
-  const prompt = `Analyze this portfolio and return a JSON health assessment. No markdown fences.
+  // Compact pipe rows: far fewer input tokens than pretty-printed JSON
+  const rows = [...holdings]
+    .sort((a, b) => b.current_value - a.current_value)
+    .map(h => `${h.symbol} | ${h.sector ?? 'Unknown'} | ${h.market_cap_category} | weight ${pctOf(h.current_value)}% | P&L ${h.pnl_pct.toFixed(1)}% | PE ${h.pe ?? 'N/A'} | ROE ${h.roe ?? 'N/A'} | 5Y PAT CAGR ${h.pat_cagr_5y ?? 'N/A'}`)
+    .join('\n')
 
-Holdings:
-${JSON.stringify(holdingsSummary, null, 2)}
+  const today = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' })
 
-Total portfolio value: ₹${totalValue.toFixed(0)}
+  const prompt = `Today is ${today}. Assess this Indian equity portfolio's health.
 
-Return ONLY this JSON:
-{
-  "health_score": 0-100 integer,
-  "summary": "2-3 sentence portfolio health summary mentioning concentration, quality, and outlook",
-  "sector_concentration": [{"sector": "name", "allocation_pct": number}],
-  "growth_outlook": ["one sector/stock insight per item, e.g. 'EICHERMOT: margin pressure from EV transition costs into H2 FY26'", "item 2", "item 3"],
-  "risks": ["risk 1", "risk 2", "risk 3"],
-  "opportunities": ["opportunity 1", "opportunity 2"]
-}`
+Holdings (symbol | sector | cap | weight | P&L | PE | ROE | 5Y PAT CAGR):
+${rows}
+
+Sector weights: ${sector_concentration.map(s => `${s.sector} ${s.allocation_pct}%`).join(', ')}
+
+Return ONLY minified JSON (single line, no markdown fences) with exactly these keys:
+{"health_score":<0-100 integer>,"summary":"<2 sentences: concentration, quality, outlook>","growth_outlook":["<SYMBOL or sector: one insight, max 20 words>", ...exactly 3],"risks":["<max 20 words>", ...exactly 3],"opportunities":["<max 20 words>", ...exactly 2]}
+Frame timelines from today. For banks/NBFCs ignore ROCE.`
 
   const msg = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',
-    max_tokens: 800,
+    max_tokens: 1200,
     system: FINANCE_SYSTEM_PROMPT,
-    messages: [{ role: 'user', content: prompt }],
+    // Prefill "{" so the model can only continue the JSON object (it occasionally answered in prose)
+    messages: [{ role: 'user', content: prompt }, { role: 'assistant', content: '{' }],
   })
 
-  const text = (msg.content[0] as { type: string; text: string }).text
+  const text = '{' + (msg.content[0] as { type: string; text: string }).text
   const match = text.match(/\{[\s\S]*\}/)
-  if (!match) throw new Error('Health: no JSON in response')
+  if (!match) throw new Error(`Health: no JSON in response (stop=${msg.stop_reason}): ${text.slice(0, 300)}`)
 
-  return JSON.parse(match[0])
+  let parsed: { health_score: number; summary: string; growth_outlook: string[]; risks: string[]; opportunities: string[] }
+  try {
+    parsed = JSON.parse(match[0])
+  } catch {
+    throw new Error(`Health: invalid JSON (stop=${msg.stop_reason}, out_tokens=${msg.usage.output_tokens})`)
+  }
+  return { ...parsed, sector_concentration }
 }
