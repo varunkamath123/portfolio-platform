@@ -5,6 +5,7 @@ const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
   '/api/fyers/auth/callback(.*)',
+  '/api/health',
 ])
 
 const isAdminRoute = createRouteMatcher(['/admin(.*)'])
